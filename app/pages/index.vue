@@ -6,6 +6,9 @@ const items = [
   "https://camserver.physics.ucsb.edu/api/images/QHY5III678C-57bbd14782e9f938e_2026-03-01T05:15:46.445.jpg"
 ]
 
+const { featuredData, pending, error, refresh } = await useFetch('/api/featured')
+
+
 </script>
 
 <template>
@@ -33,4 +36,4 @@ const items = [
      
     </UContainer>
   </div>
-</template>
+</template> 

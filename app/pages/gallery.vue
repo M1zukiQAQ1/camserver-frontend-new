@@ -1,9 +1,34 @@
 <script setup lang="ts">
 
 import GalleryCard from '~/components/galleryCard.vue';
+import type { CameraImage } from '~/type/cameraImage';
+import type { Camera } from '~/type/camera';
 
 const periodItems = ref(['Night', 'Day', 'Dawn', 'Dust'])
-const cameraItems = ref(['White Mountain OVL'])
+const config = useRuntimeConfig()
+
+const {
+    data: cameras,
+    pending: camerasPending,
+    error: camerasError
+} = await useFetch<Camera[]>('http://localhost:443/api/sites', {
+    baseURL: config.public.apiBase
+})
+
+const {
+    data: images,
+    pending: imagesPending,
+    error: imagesError
+} = await useFetch<CameraImage[]>('http://localhost:443/api/query')
+
+const cameraItems = computed(() =>
+  (cameras.value || []).map(cam => ({
+    label: cam.siteName,
+    value: cam.UID
+  }))
+)
+
+const pageNumber = ref(0)
 
 </script>
 
@@ -13,7 +38,21 @@ const cameraItems = ref(['White Mountain OVL'])
         <h3 class="text-current/75">Brose night-sky captures</h3>
     </div>
 
-    <div class="p-16 flex gap-6">
+
+    <div v-if="camerasPending || imagesPending" class="flex justify-center py-10">
+        <UIcon name="i-lucide-loader-circle" class="size-8 animate-spin p-6" />
+    </div> 
+
+    <div v-else-if="camerasError || imagesError" class="px-16">
+        <UAlert
+        color="error"
+        variant="subtle"
+        :title="imagesError?.message"
+        description="Please try again."
+        />
+    </div>
+
+    <div v-else class="p-16 flex gap-6">
             <aside class="lg:block w-72 shrink-0">
                 <UCard class="sticky top-20">
                     <div class="text-lg items-start font-semibold mb-3">Filters</div>
@@ -30,21 +69,17 @@ const cameraItems = ref(['White Mountain OVL'])
                         <div class="flex items-center ">
                             <UButton class="ml-auto">Reset Filters</UButton>
                         </div>
-                    </UForm>
+                    </UForm>    
                 </UCard>
             </aside>
 
             <main class="flex-1">
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3  gap-4">
-                        <GalleryCard img-url="/img1.jpg" camera="White Mountain OVL"/>
-                        <GalleryCard img-url="/img1.jpg" camera="White Mountain OVL"/>
-                        <GalleryCard img-url="/img1.jpg" camera="White Mountain OVL"/>
-                        <GalleryCard img-url="/img1.jpg" camera="White Mountain OVL"/>
-                        <GalleryCard img-url="/img1.jpg" camera="White Mountain OVL"/>
-                        <GalleryCard img-url="/img1.jpg" camera="White Mountain OVL"/>
-                        <GalleryCard img-url="/img1.jpg" camera="White Mountain OVL"/>
-                        <GalleryCard img-url="/img1.jpg" camera="White Mountain OVL"/>
-                        <GalleryCard img-url="/img1.jpg" camera="White Mountain OVL"/>
+                        <GalleryCard 
+                            v-for="image in images"
+                            :image="image"
+                            :site="cameras?.find((cam) => cam.cameraId == image.cameraId)?.siteName ?? 'Error'"
+                        />
                     </div>
             </main>
     </div>

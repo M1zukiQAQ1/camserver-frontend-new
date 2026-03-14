@@ -4,22 +4,25 @@
 // })
 // const data = await useLazyFetch('/api/hello')
 
-const props = defineProps({
-    imgUrl: String,
-    camera: String,
-    takenTime: String,
-    takenDate: String,
-})
+import type { CameraImage } from '~/type/cameraImage';
+
+const props = defineProps<{
+    image: CameraImage
+    site: string
+}>()
+
+const filePath = `http://localhost:443/api/images/${props.image.imgPath.split('/').pop()}.jpg`
+const dateString = props.image.timestamp.toLocaleString()
 
 </script>
 
 <template>
     <div class="flex-col w-full overflow-hidden rounded-lg border border-black/20">
-        <img :src="imgUrl" class="object-cover h-auto w-full"/>
+        <img :src="filePath" class="object-cover h-auto w-full"/>
         <div class="p-3">
-            <h6 class="text-xs text-gray-700">{{ camera }}</h6>
+            <h6 class="text-xs text-gray-700">{{ site }}</h6>
             <h6 class="text-base">Night Time</h6>
-            <h6 class="text-xs">{{ takenTime }}</h6>
+            <h6 class="text-xs">{{ dateString }}</h6>
         </div>
     </div>
 
