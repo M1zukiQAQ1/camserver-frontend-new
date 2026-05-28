@@ -4,5 +4,10 @@ export default defineAppConfig({
       primary: 'green',
       neutral: 'slate'
     }
+  },
+  runtimeConfig: {
+    public: {
+      apiBase: 'http://localhost:443'
+    }
   }
 })

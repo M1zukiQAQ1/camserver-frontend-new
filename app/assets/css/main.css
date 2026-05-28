@@ -16,3 +16,110 @@
   --color-green-900: #0A5331;
   --color-green-950: #052E16;
 }
+
+:root {
+  color-scheme: dark;
+  --sky-void: #02050d;
+  --sky-deep: #07111f;
+  --sky-panel: rgb(8 16 30 / 0.78);
+  --sky-panel-strong: rgb(10 20 36 / 0.94);
+  --sky-line: rgb(184 206 233 / 0.16);
+  --sky-line-strong: rgb(125 211 252 / 0.42);
+  --sky-text: #edf6ff;
+  --sky-muted: #9fb0c5;
+  --sky-cyan: #7dd3fc;
+  --sky-gold: #f8d87c;
+  --sky-green: #8de3c8;
+  --sky-rose: #f29aa3;
+}
+
+html {
+  min-height: 100%;
+  background: var(--sky-void);
+}
+
+body {
+  min-height: 100vh;
+  color: var(--sky-text);
+  background:
+    radial-gradient(circle at 15% 8%, rgb(125 211 252 / 0.18), transparent 30%),
+    radial-gradient(circle at 82% 0%, rgb(248 216 124 / 0.1), transparent 28%),
+    linear-gradient(180deg, var(--sky-void), var(--sky-deep) 44%, #03050c 100%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1px 1px at 8% 18%, rgb(255 255 255 / 0.72) 50%, transparent 52%),
+    radial-gradient(1px 1px at 23% 71%, rgb(255 255 255 / 0.42) 50%, transparent 52%),
+    radial-gradient(1px 1px at 46% 24%, rgb(125 211 252 / 0.54) 50%, transparent 52%),
+    radial-gradient(2px 2px at 67% 18%, rgb(255 255 255 / 0.38) 50%, transparent 54%),
+    radial-gradient(1px 1px at 78% 76%, rgb(141 227 200 / 0.46) 50%, transparent 52%),
+    radial-gradient(1px 1px at 92% 42%, rgb(248 216 124 / 0.46) 50%, transparent 52%);
+  opacity: 0.78;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, transparent 0 46%, rgb(125 211 252 / 0.12) 47%, transparent 49%),
+    linear-gradient(0deg, rgb(255 255 255 / 0.05), transparent 22%);
+  mask-image: linear-gradient(180deg, transparent, black 18%, black 82%, transparent);
+}
+
+.astro-panel {
+  border: 1px solid var(--sky-line);
+  border-radius: 0.5rem;
+  background: var(--sky-panel);
+  box-shadow:
+    0 24px 72px rgb(0 0 0 / 0.42),
+    inset 0 0 0 1px rgb(255 255 255 / 0.03);
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.astro-panel-strong {
+  border: 1px solid var(--sky-line);
+  border-radius: 0.5rem;
+  background: var(--sky-panel-strong);
+  box-shadow:
+    0 18px 54px rgb(0 0 0 / 0.36),
+    inset 0 0 0 1px rgb(255 255 255 / 0.03);
+}
+
+.astro-eyebrow {
+  color: var(--sky-green);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.astro-muted {
+  color: var(--sky-muted);
+}
+
+.astro-ring {
+  position: relative;
+}
+
+.astro-ring::after {
+  content: "";
+  position: absolute;
+  inset: 1rem;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 9999px;
+  pointer-events: none;
+  box-shadow: inset 0 0 48px rgb(125 211 252 / 0.08);
+}
+
+.u-button {
+  border-radius: 0.5rem;
+}
