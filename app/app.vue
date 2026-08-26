@@ -70,6 +70,14 @@ const menuItems = computed<NavigationMenuItem[]>(() => [
       </template>
     </UHeader>
 
+    <div class="border-b border-amber-400/30 bg-amber-500/10 px-4 py-2 text-center text-sm text-amber-200">
+      <UIcon
+        name="i-lucide-construction"
+        class="mr-1 inline-block align-text-bottom"
+      />
+      This website is under construction — we are migrating to a new server. Some images and data may be temporarily unavailable.
+    </div>
+
     <UMain class="min-h-[calc(100vh-4rem)]">
       <NuxtPage />
     </UMain>
