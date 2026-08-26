@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
 
+const underConstruction = useRuntimeConfig().public.underConstruction
+
 useHead({
   titleTemplate: title => title ? `${title} | UCSB All Sky` : 'UCSB All Sky Camera',
   meta: [
@@ -56,10 +58,12 @@ const menuItems = computed<NavigationMenuItem[]>(() => [
 
       <template #right>
         <UNavigationMenu
+          v-if="!underConstruction"
           :items="menuItems"
           class="hidden md:flex"
         />
         <UButton
+          v-if="!underConstruction"
           to="/gallery"
           icon="i-lucide-images"
           variant="subtle"
@@ -71,7 +75,31 @@ const menuItems = computed<NavigationMenuItem[]>(() => [
     </UHeader>
 
     <UMain class="min-h-[calc(100vh-4rem)]">
-      <NuxtPage />
+      <div
+        v-if="underConstruction"
+        class="relative isolate overflow-hidden"
+      >
+        <div class="absolute inset-0 -z-10 bg-gradient-to-b from-slate-950/40 via-slate-950/82 to-slate-950" />
+        <UContainer class="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center gap-6 py-16 text-center">
+          <span class="astro-eyebrow flex items-center gap-3">
+            <span class="h-px w-8 bg-amber-200/80" />
+            Deep Space Observatory
+            <span class="h-px w-8 bg-amber-200/80" />
+          </span>
+          <h1 class="text-5xl font-black tracking-normal text-white md:text-7xl">
+            Under Construction
+          </h1>
+          <p class="max-w-xl text-lg leading-8 text-slate-300">
+            The UCSB All Sky Camera website is moving to a new server.
+            We'll be back online soon.
+          </p>
+          <UIcon
+            name="i-lucide-construction"
+            class="size-10 text-amber-300/80"
+          />
+        </UContainer>
+      </div>
+      <NuxtPage v-else />
     </UMain>
   </UApp>
 </template>

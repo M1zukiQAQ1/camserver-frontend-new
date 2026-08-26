@@ -23,7 +23,8 @@ export default defineNuxtConfig({
     backendTlsVerify: nodeEnv.NUXT_BACKEND_TLS_VERIFY === 'true',
     backendProxyTimeoutMs: Number(nodeEnv.NUXT_BACKEND_PROXY_TIMEOUT_MS || 30000),
     public: {
-      apiBase: nodeEnv.NUXT_PUBLIC_API_BASE || '/api/backend'
+      apiBase: nodeEnv.NUXT_PUBLIC_API_BASE || '/api/backend',
+      underConstruction: nodeEnv.NUXT_PUBLIC_UNDER_CONSTRUCTION === 'true'
     }
   },
 
