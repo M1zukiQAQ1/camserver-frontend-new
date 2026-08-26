@@ -12,8 +12,7 @@ const props = defineProps<{
   site: string
 }>()
 
-const config = useRuntimeConfig()
-const apiBase = String(config.public.apiBase || 'http://localhost:443')
+const apiBase = useApiBase()
 const filePath = `${apiBase}/api/images/${props.image.imgPath.split('/').pop()}.jpg`
 const dateString = `${new Date(props.image.timestamp).toLocaleDateString()} ${new Date(props.image.timestamp).toLocaleTimeString()}`
 const period = getImagePeriod(props.image.timestamp)

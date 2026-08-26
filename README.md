@@ -1,60 +1,43 @@
-# Nuxt Starter Template
+# CamServer Frontend
 
-[![Nuxt UI](https://img.shields.io/badge/Made%20with-Nuxt%20UI-00DC82?logo=nuxt&labelColor=020420)](https://ui.nuxt.com)
-
-Use this template to get started with [Nuxt UI](https://ui.nuxt.com) quickly.
-
-- [Live demo](https://starter-template.nuxt.dev/)
-- [Documentation](https://ui.nuxt.com/docs/getting-started/installation/nuxt)
-
-<a href="https://starter-template.nuxt.dev/" target="_blank">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://ui.nuxt.com/assets/templates/nuxt/starter-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="https://ui.nuxt.com/assets/templates/nuxt/starter-light.png">
-    <img alt="Nuxt Starter Template" src="https://ui.nuxt.com/assets/templates/nuxt/starter-light.png" width="830" height="466">
-  </picture>
-</a>
-
-> The starter template for Vue is on https://github.com/nuxt-ui-templates/starter-vue.
-
-## Quick Start
-
-```bash [Terminal]
-npm create nuxt@latest -- -t github:nuxt-ui-templates/starter
-```
-
-## Deploy your own
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-name=starter&repository-url=https%3A%2F%2Fgithub.com%2Fnuxt-ui-templates%2Fstarter&demo-image=https%3A%2F%2Fui.nuxt.com%2Fassets%2Ftemplates%2Fnuxt%2Fstarter-dark.png&demo-url=https%3A%2F%2Fstarter-template.nuxt.dev%2F&demo-title=Nuxt%20Starter%20Template&demo-description=A%20minimal%20template%20to%20get%20started%20with%20Nuxt%20UI.)
+Nuxt frontend for the All Sky Cam gallery, live seeing monitor, and plate-solve detail tools.
 
 ## Setup
 
-Make sure to install the dependencies:
-
 ```bash
-pnpm install
+npm install
 ```
 
-## Development Server
-
-Start the development server on `http://localhost:3000`:
+## Development
 
 ```bash
-pnpm dev
+npm run dev
 ```
+
+The app uses a same-origin Nuxt proxy by default:
+
+```text
+Browser -> /api/backend/** -> http://localhost:443/**
+```
+
+This matches the backend's `application-local.yml`, which listens on port `443` with SSL disabled.
+
+## Backend Proxy Config
+
+Defaults are ready for the local camera backend:
+
+```bash
+NUXT_BACKEND_API_BASE=http://localhost:443
+NUXT_PUBLIC_API_BASE=/api/backend
+```
+
+If you run the backend with the default TLS-enabled `application.yml`, set `NUXT_BACKEND_API_BASE=https://localhost:443`.
 
 ## Production
 
-Build the application for production:
-
 ```bash
-pnpm build
+npm run build
+npm run preview
 ```
 
-Locally preview production build:
-
-```bash
-pnpm preview
-```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+For production behind a trusted reverse proxy, set `NUXT_BACKEND_API_BASE` to the backend origin and set `NUXT_BACKEND_TLS_VERIFY=true` once the backend has a trusted certificate.

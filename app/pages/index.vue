@@ -4,8 +4,7 @@ import type { ImageQuery } from '~/type/imageQuery'
 import { getImageFileName } from '~/utils/getImageFileName'
 import { getImagePeriod } from '~/utils/getImagePeriod'
 
-const config = useRuntimeConfig()
-const apiBase = String(config.public.apiBase || 'http://localhost:443')
+const apiBase = useApiBase()
 
 const query: ImageQuery = {
   featured: true

@@ -20,7 +20,7 @@ const menuItems = computed<NavigationMenuItem[]>(() => [
   {
     label: 'Seeing Monitor',
     icon: 'i-lucide-radio-tower',
-    to: '/'
+    to: '/seeing-monitor'
   },
   {
     label: 'Star Tracker',

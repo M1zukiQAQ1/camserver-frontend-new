@@ -5,8 +5,7 @@ import { getImageFileName } from '~/utils/getImageFileName'
 import { getImagePeriod } from '~/utils/getImagePeriod'
 
 const route = useRoute()
-const config = useRuntimeConfig()
-const apiBase = String(config.public.apiBase || 'http://localhost:443')
+const apiBase = useApiBase()
 const imgId = computed(() => String(route.params.imgId))
 const plateSolve = ref<PlateSolveResult | null>(null)
 const plateSolvePending = ref(false)

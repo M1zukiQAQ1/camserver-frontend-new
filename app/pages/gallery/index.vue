@@ -5,8 +5,7 @@ import type { Camera } from '~/type/camera'
 import type { CameraImage } from '~/type/cameraImage'
 import type { ImageQuery } from '~/type/imageQuery'
 
-const config = useRuntimeConfig()
-const apiBase = String(config.public.apiBase || 'http://localhost:443')
+const apiBase = useApiBase()
 
 type SelectItem = {
   label: string
