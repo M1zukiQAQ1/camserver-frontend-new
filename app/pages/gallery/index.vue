@@ -158,7 +158,7 @@ const cameraItems = computed<SelectItem[]>(() => [
 
 const siteNameFor = (image: CameraImage) =>
   image.siteName
-  || cameras.value?.find(cam => cam.cameraId === image.cameraId)?.siteName
+  || (image.cameraId ? cameras.value?.find(cam => cam.cameraId === image.cameraId)?.siteName : undefined)
   || 'Unknown site'
 
 const isInitialPending = computed(() =>
