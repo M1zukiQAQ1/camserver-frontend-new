@@ -171,31 +171,54 @@ watch(imageUrl, () => {
 
 const period = computed(() => image.value ? getImagePeriod(image.value.timestamp) : '')
 
-const leftParams = computed(() => image.value
+type FrameParam = {
+  label: string
+  value: string | number
+  icon: string
+}
+
+const formatCompactNumber = (value: number) => Number(value.toFixed(2)).toString()
+
+// The capture script stores exposure time in microseconds.
+const exposureLabel = computed(() => {
+  const micros = image.value?.exposure ?? 0
+
+  if (micros >= 1_000_000) {
+    return `${formatCompactNumber(micros / 1_000_000)} s`
+  }
+
+  if (micros >= 1_000) {
+    return `${formatCompactNumber(micros / 1_000)} ms`
+  }
+
+  return `${micros} µs`
+})
+
+// Tiles above the image: when and where the frame was captured.
+const captureParams = computed<FrameParam[]>(() => image.value
   ? [
-      { label: 'Site', value: image.value.siteName },
-      { label: 'Camera', value: image.value.cameraId },
-      { label: 'Captured', value: capturedAt.value },
-      { label: 'Period', value: period.value },
-      { label: 'Time zone', value: image.value.timeZone }
+      { label: 'Captured', value: capturedAt.value, icon: 'i-lucide-clock' },
+      { label: 'Period', value: period.value, icon: 'i-lucide-sun-moon' },
+      { label: 'Time zone', value: image.value.timeZone || 'Unknown', icon: 'i-lucide-globe' },
+      { label: 'Camera', value: image.value.cameraId || 'Unknown', icon: 'i-lucide-camera' }
     ]
   : []
 )
 
-const rightParams = computed(() => image.value
+// Tiles below the image: sensor settings and the archived raw frame.
+const sensorParams = computed<FrameParam[]>(() => image.value
   ? [
-      { label: 'Bit depth', value: image.value.bit },
-      { label: 'Gain', value: image.value.gain },
-      { label: 'Exposure', value: image.value.exposure },
-      { label: 'Temperature', value: `${image.value.temperature} C` },
-      { label: 'Humidity', value: `${image.value.humidity}%` },
-      { label: 'Image ID', value: image.value.imgId },
-      { label: 'File', value: imageFileName.value },
+      { label: 'Exposure', value: exposureLabel.value, icon: 'i-lucide-timer' },
+      { label: 'Gain', value: image.value.gain, icon: 'i-lucide-gauge' },
+      { label: 'Bit depth', value: `${image.value.bit}-bit`, icon: 'i-lucide-binary' },
+      { label: 'Temperature', value: `${image.value.temperature.toFixed(1)} °C`, icon: 'i-lucide-thermometer' },
+      { label: 'Humidity', value: `${image.value.humidity.toFixed(1)} %`, icon: 'i-lucide-droplets' },
       {
-        label: 'FITS on server',
+        label: 'FITS frame',
         value: fitsInfo.value
-          ? (hasFits.value ? `${fitsSizeLabel.value}${fitsInfo.value.gzipped ? ' (gzip archived)' : ''}` : 'Not available')
-          : 'Checking'
+          ? (hasFits.value ? `${fitsSizeLabel.value}${fitsInfo.value.gzipped ? ' · gzip' : ''}` : 'Not available')
+          : 'Checking',
+        icon: 'i-lucide-file-archive'
       }
     ]
   : []
@@ -723,19 +746,32 @@ onBeforeUnmount(() => {
 
 <template>
   <UContainer class="py-8 lg:py-10">
-    <div class="mb-8 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-      <div>
+    <div class="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+      <div class="min-w-0">
         <p class="astro-eyebrow">
           Frame analysis
         </p>
-        <h1 class="mt-2 text-4xl font-black leading-none tracking-normal text-white md:text-6xl">
-          Image Details
+        <h1 class="mt-2 text-4xl font-black leading-none tracking-normal text-white md:text-5xl">
+          {{ image?.siteName || 'Image Details' }}
         </h1>
         <p
           v-if="image"
-          class="mt-3 text-sm text-slate-400"
+          class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-400"
         >
-          {{ image.siteName }} · {{ capturedAt }}
+          <span class="inline-flex items-center gap-1.5">
+            <UIcon
+              name="i-lucide-clock"
+              class="size-4 text-sky-200/80"
+            />
+            {{ capturedAt }}
+          </span>
+          <span class="inline-flex items-center gap-1.5">
+            <UIcon
+              name="i-lucide-hash"
+              class="size-4 text-sky-200/80"
+            />
+            Image {{ image.imgId }}
+          </span>
         </p>
       </div>
 
@@ -781,36 +817,6 @@ onBeforeUnmount(() => {
         </UDropdownMenu>
 
         <UButton
-          :disabled="!hasPlateSolveResult"
-          :icon="overlayToggleIcon"
-          color="neutral"
-          variant="subtle"
-          @click="togglePlateSolveOverlay"
-        >
-          {{ overlayToggleLabel }}
-        </UButton>
-
-        <UButton
-          :disabled="!hasPlateSolveResult"
-          :icon="candidateToggleIcon"
-          color="neutral"
-          variant="subtle"
-          @click="toggleUnconfirmedCandidates"
-        >
-          {{ candidateToggleLabel }}
-        </UButton>
-
-        <UButton
-          :disabled="!image"
-          icon="i-lucide-maximize-2"
-          color="neutral"
-          variant="subtle"
-          @click="openPlateSolveFullscreen"
-        >
-          Full Screen
-        </UButton>
-
-        <UButton
           to="/gallery"
           icon="i-lucide-arrow-left"
           color="neutral"
@@ -842,224 +848,228 @@ onBeforeUnmount(() => {
 
     <div
       v-else
-      class="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)_300px] xl:items-start"
+      class="space-y-6"
     >
-      <aside class="space-y-3">
-        <dl class="astro-panel p-4">
-          <div
-            v-for="param in leftParams"
-            :key="param.label"
-            class="border-b border-white/10 py-3 last:border-b-0"
-          >
-            <dt class="text-xs font-bold uppercase tracking-wider text-slate-500">
-              {{ param.label }}
-            </dt>
-            <dd class="mt-1 break-words text-sm text-slate-200">
-              {{ param.value }}
-            </dd>
-          </div>
-        </dl>
-
-        <UAlert
-          v-if="plateSolveError"
-          class="astro-panel p-2"
-          color="error"
-          variant="subtle"
-          title="Plate solve failed"
-          :description="plateSolveError"
-        />
-      </aside>
-
-      <main class="flex min-h-[60vh] min-w-0 items-center justify-center">
-        <div class="image-viewport astro-panel flex max-h-[75vh] w-full max-w-[min(100%,920px)] items-center justify-center overflow-hidden bg-black p-2">
-          <figure
-            class="plate-solve-stage relative max-h-[75vh] max-w-full"
-            :style="plateSolveStageStyle"
-          >
-            <div
-              v-if="imageFailed"
-              class="grid aspect-[4/3] w-[min(100%,720px)] place-items-center p-8 text-center text-slate-400"
-            >
-              <div class="flex flex-col items-center gap-3">
-                <UIcon
-                  name="i-lucide-image-off"
-                  class="size-10"
-                />
-                <p class="text-sm font-semibold text-slate-200">
-                  Image data unavailable
-                </p>
-                <p class="max-w-xs text-xs leading-5">
-                  This frame's file is missing or empty on the server, so it cannot be displayed or plate-solved.
-                </p>
-              </div>
-            </div>
-            <img
-              v-else
-              :src="imageUrl"
-              :alt="`${image.siteName} all sky capture ${capturedAt}`"
-              class="block max-h-[75vh] max-w-full object-contain"
-              @error="imageFailed = true"
-            >
-
-            <div
-              v-if="isPlateSolving"
-              class="solve-animation absolute inset-0 overflow-hidden"
-            >
-              <div class="solve-grid" />
-              <div class="solve-beam" />
-              <div class="solve-orbit solve-orbit-a" />
-              <div class="solve-orbit solve-orbit-b" />
-              <div class="solve-status">
-                <span>{{ solveAnimationStatus }}</span>
-                <span class="solve-status-track">
-                  <span
-                    class="solve-status-fill"
-                    :style="plateSolveProgressBarStyle"
-                  />
-                </span>
-              </div>
-            </div>
-
-            <div
-              v-if="shouldShowPlateSolveOverlay"
-              class="absolute inset-0"
-            >
-              <svg
-                v-if="shouldShowZodiacLines"
-                class="zodiac-lines pointer-events-none absolute inset-0 h-full w-full"
-                aria-hidden="true"
-              >
-                <line
-                  v-for="segment in zodiacLineSegments"
-                  :key="segment.id"
-                  class="zodiac-line"
-                  :x1="percentCoordinate(segment.from.x)"
-                  :y1="percentCoordinate(segment.from.y)"
-                  :x2="percentCoordinate(segment.to.x)"
-                  :y2="percentCoordinate(segment.to.y)"
-                />
-              </svg>
-
-              <div
-                v-if="cropBoxStyle"
-                class="pointer-events-none absolute border border-emerald-300/60"
-                :style="cropBoxStyle"
-              />
-              <button
-                v-for="star in visiblePlateSolveStars"
-                :key="star.id"
-                type="button"
-                :aria-label="starAriaLabel(star)"
-                class="star-marker"
-                :class="starMarkerClass(star)"
-                :style="starStyle(star)"
-                @click.stop="selectStar(star)"
-              >
-                <span
-                  v-if="starLabel(star)"
-                  class="star-label"
-                >
-                  {{ starLabel(star) }}
-                </span>
-              </button>
-            </div>
-          </figure>
-        </div>
-      </main>
-
-      <aside class="space-y-3">
-        <div class="astro-panel p-4">
-          <div class="flex items-start gap-2">
+      <dl class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div
+          v-for="param in captureParams"
+          :key="param.label"
+          class="param-tile astro-panel-strong"
+        >
+          <dt class="param-label">
             <UIcon
-              name="i-lucide-radar"
-              class="mt-0.5 size-4 text-sky-200"
+              :name="param.icon"
+              class="size-3.5 text-sky-200/80"
             />
-            <div>
-              <h2 class="text-sm font-extrabold text-white">
-                Plate Solve
-              </h2>
-              <p class="mt-1 text-xs leading-5 text-slate-400">
-                {{ plateSolveSummary }}
-              </p>
-            </div>
-          </div>
-
-          <div
-            v-if="shouldShowPlateSolveProgress"
-            class="mt-4 rounded-md border border-white/10 bg-white/[0.035] p-3"
+            {{ param.label }}
+          </dt>
+          <dd
+            class="param-value"
+            :title="String(param.value)"
           >
-            <div class="flex items-center justify-between gap-3 text-xs font-bold text-slate-200">
-              <span>{{ plateSolveProgressPhase }}</span>
-              <span class="tabular-nums">{{ plateSolveProgressPercent }}%</span>
-            </div>
+            {{ param.value }}
+          </dd>
+        </div>
+      </dl>
 
-            <div class="solve-progress-track mt-2">
+      <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
+        <section
+          class="astro-panel min-w-0 overflow-hidden"
+          aria-label="Captured frame"
+        >
+          <div class="image-viewport flex min-h-[50vh] items-center justify-center bg-black p-2">
+            <figure
+              class="plate-solve-stage relative max-h-[76vh] max-w-full"
+              :style="plateSolveStageStyle"
+            >
               <div
-                class="solve-progress-fill"
-                :style="plateSolveProgressBarStyle"
-              />
-            </div>
+                v-if="imageFailed"
+                class="grid aspect-[4/3] w-[min(100%,720px)] place-items-center p-8 text-center text-slate-400"
+              >
+                <div class="flex flex-col items-center gap-3">
+                  <UIcon
+                    name="i-lucide-image-off"
+                    class="size-10"
+                  />
+                  <p class="text-sm font-semibold text-slate-200">
+                    Image data unavailable
+                  </p>
+                  <p class="max-w-xs text-xs leading-5">
+                    This frame's file is missing or empty on the server, so it cannot be displayed or plate-solved.
+                  </p>
+                </div>
+              </div>
+              <img
+                v-else
+                :src="imageUrl"
+                :alt="`${image.siteName} all sky capture ${capturedAt}`"
+                class="block max-h-[75vh] max-w-full object-contain"
+                @error="imageFailed = true"
+              >
 
-            <p
-              v-if="plateSolveProgressDetail"
-              class="mt-2 text-xs leading-5 text-slate-400"
-            >
-              {{ plateSolveProgressDetail }}
-            </p>
+              <div
+                v-if="isPlateSolving"
+                class="solve-animation absolute inset-0 overflow-hidden"
+              >
+                <div class="solve-grid" />
+                <div class="solve-beam" />
+                <div class="solve-orbit solve-orbit-a" />
+                <div class="solve-orbit solve-orbit-b" />
+                <div class="solve-status">
+                  <span>{{ solveAnimationStatus }}</span>
+                  <span class="solve-status-track">
+                    <span
+                      class="solve-status-fill"
+                      :style="plateSolveProgressBarStyle"
+                    />
+                  </span>
+                </div>
+              </div>
 
-            <pre
-              v-if="plateSolveProgressLogTail.length"
-              class="solve-log mt-3"
-            >{{ plateSolveProgressLogTail.join('\n') }}</pre>
+              <div
+                v-if="shouldShowPlateSolveOverlay"
+                class="absolute inset-0"
+              >
+                <svg
+                  v-if="shouldShowZodiacLines"
+                  class="zodiac-lines pointer-events-none absolute inset-0 h-full w-full"
+                  aria-hidden="true"
+                >
+                  <line
+                    v-for="segment in zodiacLineSegments"
+                    :key="segment.id"
+                    class="zodiac-line"
+                    :x1="percentCoordinate(segment.from.x)"
+                    :y1="percentCoordinate(segment.from.y)"
+                    :x2="percentCoordinate(segment.to.x)"
+                    :y2="percentCoordinate(segment.to.y)"
+                  />
+                </svg>
+
+                <div
+                  v-if="cropBoxStyle"
+                  class="pointer-events-none absolute border border-emerald-300/60"
+                  :style="cropBoxStyle"
+                />
+                <button
+                  v-for="star in visiblePlateSolveStars"
+                  :key="star.id"
+                  type="button"
+                  :aria-label="starAriaLabel(star)"
+                  class="star-marker"
+                  :class="starMarkerClass(star)"
+                  :style="starStyle(star)"
+                  @click.stop="selectStar(star)"
+                >
+                  <span
+                    v-if="starLabel(star)"
+                    class="star-label"
+                  >
+                    {{ starLabel(star) }}
+                  </span>
+                </button>
+              </div>
+            </figure>
           </div>
 
-          <dl
-            v-if="plateSolveParams.length"
-            class="mt-4"
-          >
-            <div
-              v-for="param in plateSolveParams"
-              :key="param.label"
-              class="border-t border-white/10 py-2"
+          <div class="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
+            <p
+              class="min-w-0 flex-1 truncate font-mono text-xs text-slate-400"
+              :title="imageFileName"
             >
-              <dt class="text-xs font-bold uppercase tracking-wider text-slate-500">
-                {{ param.label }}
-              </dt>
-              <dd class="mt-1 break-words text-sm text-slate-200">
-                {{ param.value }}
-              </dd>
-            </div>
-          </dl>
-
-          <div
-            v-if="selectedStar"
-            class="mt-4 border-t border-white/10 pt-4"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <h3 class="text-sm font-extrabold text-white">
-                  {{ starDisplayName(selectedStar) }}
-                </h3>
-                <p class="mt-1 text-xs text-slate-400">
-                  {{ starDetailSubtitle(selectedStar) }}
-                </p>
-              </div>
+              {{ imageFileName }}
+            </p>
+            <div class="flex flex-wrap items-center gap-2">
+              <UButton
+                size="sm"
+                :disabled="!hasPlateSolveResult"
+                :icon="overlayToggleIcon"
+                color="neutral"
+                variant="subtle"
+                @click="togglePlateSolveOverlay"
+              >
+                {{ overlayToggleLabel }}
+              </UButton>
 
               <UButton
-                icon="i-lucide-x"
+                size="sm"
+                :disabled="!hasPlateSolveResult"
+                :icon="candidateToggleIcon"
                 color="neutral"
-                variant="ghost"
-                size="xs"
-                aria-label="Close star details"
-                @click="closeSelectedStar"
+                variant="subtle"
+                @click="toggleUnconfirmedCandidates"
+              >
+                {{ candidateToggleLabel }}
+              </UButton>
+
+              <UButton
+                size="sm"
+                :disabled="imageFailed"
+                icon="i-lucide-maximize-2"
+                color="neutral"
+                variant="subtle"
+                @click="openPlateSolveFullscreen"
+              >
+                Full Screen
+              </UButton>
+            </div>
+          </div>
+        </section>
+
+        <aside class="space-y-4">
+          <div class="astro-panel p-4">
+            <div class="flex items-start gap-2">
+              <UIcon
+                name="i-lucide-radar"
+                class="mt-0.5 size-4 text-sky-200"
               />
+              <div>
+                <h2 class="text-sm font-extrabold text-white">
+                  Plate Solve
+                </h2>
+                <p class="mt-1 text-xs leading-5 text-slate-400">
+                  {{ plateSolveSummary }}
+                </p>
+              </div>
             </div>
 
-            <dl class="mt-3">
+            <div
+              v-if="shouldShowPlateSolveProgress"
+              class="mt-4 rounded-md border border-white/10 bg-white/[0.035] p-3"
+            >
+              <div class="flex items-center justify-between gap-3 text-xs font-bold text-slate-200">
+                <span>{{ plateSolveProgressPhase }}</span>
+                <span class="tabular-nums">{{ plateSolveProgressPercent }}%</span>
+              </div>
+
+              <div class="solve-progress-track mt-2">
+                <div
+                  class="solve-progress-fill"
+                  :style="plateSolveProgressBarStyle"
+                />
+              </div>
+
+              <p
+                v-if="plateSolveProgressDetail"
+                class="mt-2 text-xs leading-5 text-slate-400"
+              >
+                {{ plateSolveProgressDetail }}
+              </p>
+
+              <pre
+                v-if="plateSolveProgressLogTail.length"
+                class="solve-log mt-3"
+              >{{ plateSolveProgressLogTail.join('\n') }}</pre>
+            </div>
+
+            <dl
+              v-if="plateSolveParams.length"
+              class="mt-4"
+            >
               <div
-                v-for="param in selectedStarParams"
+                v-for="param in plateSolveParams"
                 :key="param.label"
-                class="border-t border-white/10 py-2 first:border-t-0"
+                class="border-t border-white/10 py-2"
               >
                 <dt class="text-xs font-bold uppercase tracking-wider text-slate-500">
                   {{ param.label }}
@@ -1070,81 +1080,137 @@ onBeforeUnmount(() => {
               </div>
             </dl>
 
-            <UAlert
-              v-if="selectedStarIsOnlyPixelDetection"
-              class="mt-3"
-              color="warning"
-              variant="subtle"
-              title="Pixel detection only"
-              description="RA, Dec, catalog IDs, and links appear after the local plate solver produces a WCS solution."
-            />
-
-            <UAlert
-              v-else-if="selectedStarHasNoCatalogMatch"
-              class="mt-3"
-              color="neutral"
-              variant="subtle"
-              title="Unmatched point candidate"
-              description="This point has a projected sky coordinate, but no reliable catalog match. It may be cloud texture, noise, or another non-stellar artifact."
-            />
-
             <div
-              v-if="selectedStarIdentifiers.length"
-              class="mt-3 flex flex-wrap gap-2"
+              v-if="selectedStar"
+              class="mt-4 border-t border-white/10 pt-4"
             >
-              <a
-                v-for="identifier in selectedStarIdentifiers"
-                :key="`${identifier.catalog}-${identifier.value}`"
-                class="star-link"
-                :href="identifier.url"
-                target="_blank"
-                rel="noreferrer"
-              >
-                {{ identifier.label }}
-                <UIcon
-                  name="i-lucide-external-link"
-                  class="size-3"
-                />
-              </a>
-            </div>
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h3 class="text-sm font-extrabold text-white">
+                    {{ starDisplayName(selectedStar) }}
+                  </h3>
+                  <p class="mt-1 text-xs text-slate-400">
+                    {{ starDetailSubtitle(selectedStar) }}
+                  </p>
+                </div>
 
-            <div
-              v-if="selectedStarLinks.length"
-              class="mt-3 grid gap-2"
-            >
-              <a
-                v-for="link in selectedStarLinks"
-                :key="link.url"
-                class="star-link justify-between"
-                :href="link.url"
-                target="_blank"
-                rel="noreferrer"
-              >
-                {{ link.label }}
-                <UIcon
-                  name="i-lucide-external-link"
-                  class="size-3"
+                <UButton
+                  icon="i-lucide-x"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  aria-label="Close star details"
+                  @click="closeSelectedStar"
                 />
-              </a>
+              </div>
+
+              <dl class="mt-3">
+                <div
+                  v-for="param in selectedStarParams"
+                  :key="param.label"
+                  class="border-t border-white/10 py-2 first:border-t-0"
+                >
+                  <dt class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    {{ param.label }}
+                  </dt>
+                  <dd class="mt-1 break-words text-sm text-slate-200">
+                    {{ param.value }}
+                  </dd>
+                </div>
+              </dl>
+
+              <UAlert
+                v-if="selectedStarIsOnlyPixelDetection"
+                class="mt-3"
+                color="warning"
+                variant="subtle"
+                title="Pixel detection only"
+                description="RA, Dec, catalog IDs, and links appear after the local plate solver produces a WCS solution."
+              />
+
+              <UAlert
+                v-else-if="selectedStarHasNoCatalogMatch"
+                class="mt-3"
+                color="neutral"
+                variant="subtle"
+                title="Unmatched point candidate"
+                description="This point has a projected sky coordinate, but no reliable catalog match. It may be cloud texture, noise, or another non-stellar artifact."
+              />
+
+              <div
+                v-if="selectedStarIdentifiers.length"
+                class="mt-3 flex flex-wrap gap-2"
+              >
+                <a
+                  v-for="identifier in selectedStarIdentifiers"
+                  :key="`${identifier.catalog}-${identifier.value}`"
+                  class="star-link"
+                  :href="identifier.url"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {{ identifier.label }}
+                  <UIcon
+                    name="i-lucide-external-link"
+                    class="size-3"
+                  />
+                </a>
+              </div>
+
+              <div
+                v-if="selectedStarLinks.length"
+                class="mt-3 grid gap-2"
+              >
+                <a
+                  v-for="link in selectedStarLinks"
+                  :key="link.url"
+                  class="star-link justify-between"
+                  :href="link.url"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {{ link.label }}
+                  <UIcon
+                    name="i-lucide-external-link"
+                    class="size-3"
+                  />
+                </a>
+              </div>
             </div>
           </div>
-        </div>
 
-        <dl class="astro-panel p-4">
-          <div
-            v-for="param in rightParams"
-            :key="param.label"
-            class="border-b border-white/10 py-3 last:border-b-0"
+          <UAlert
+            v-if="plateSolveError"
+            class="astro-panel p-2"
+            color="error"
+            variant="subtle"
+            title="Plate solve failed"
+            :description="plateSolveError"
+          />
+        </aside>
+      </div>
+
+      <dl class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <div
+          v-for="param in sensorParams"
+          :key="param.label"
+          class="param-tile astro-panel-strong"
+        >
+          <dt class="param-label">
+            <UIcon
+              :name="param.icon"
+              class="size-3.5 text-sky-200/80"
+            />
+            {{ param.label }}
+          </dt>
+          <dd
+            class="param-value"
+            :title="String(param.value)"
           >
-            <dt class="text-xs font-bold uppercase tracking-wider text-slate-500">
-              {{ param.label }}
-            </dt>
-            <dd class="mt-1 break-words text-sm text-slate-200">
-              {{ param.value }}
-            </dd>
-          </div>
-        </dl>
-      </aside>
+            {{ param.value }}
+          </dd>
+        </div>
+      </dl>
     </div>
 
     <Teleport to="body">
@@ -1336,6 +1402,33 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.param-tile {
+  min-width: 0;
+  padding: 0.85rem 1rem;
+}
+
+.param-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: rgb(100 116 139);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.param-value {
+  margin-top: 0.35rem;
+  overflow: hidden;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .image-viewport {
   touch-action: pan-x pan-y;
 }
