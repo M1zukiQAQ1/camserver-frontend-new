@@ -55,14 +55,8 @@ const currentYear = new Date().getFullYear()
       <template #left>
         <NuxtLink
           to="/"
-          class="flex min-w-0 items-center gap-3 text-current no-underline"
+          class="flex min-w-0 items-center text-current no-underline"
         >
-          <span
-            class="brand-mark"
-            aria-hidden="true"
-          >
-            <span>DS</span>
-          </span>
           <span class="min-w-0">
             <span class="block truncate text-sm font-extrabold tracking-wide text-white sm:text-base">All Sky Cameras</span>
             <span class="hidden text-xs text-slate-400 sm:block">Deep Space Observatory</span>
@@ -125,21 +119,13 @@ const currentYear = new Date().getFullYear()
       class="border-t border-white/10 bg-slate-950/40"
     >
       <UContainer class="flex flex-col gap-6 py-8 text-sm text-slate-400 md:flex-row md:items-center md:justify-between">
-        <div class="flex items-center gap-3">
-          <span
-            class="brand-mark"
-            aria-hidden="true"
-          >
-            <span>DS</span>
-          </span>
-          <div>
-            <p class="font-bold text-slate-200">
-              UCSB Deep Space Observatory
-            </p>
-            <p class="text-xs">
-              All Sky Camera archive · Broida Hall, University of California, Santa Barbara
-            </p>
-          </div>
+        <div>
+          <p class="font-bold text-slate-200">
+            UCSB Deep Space Observatory
+          </p>
+          <p class="text-xs">
+            All Sky Camera archive · Broida Hall, University of California, Santa Barbara
+          </p>
         </div>
         <nav
           class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-semibold uppercase tracking-wider"
@@ -159,30 +145,3 @@ const currentYear = new Date().getFullYear()
     </footer>
   </UApp>
 </template>
-
-<style scoped>
-.brand-mark {
-  position: relative;
-  display: grid;
-  width: 2.5rem;
-  height: 2.5rem;
-  flex: 0 0 auto;
-  place-items: center;
-  overflow: hidden;
-  border: 1px solid rgb(125 211 252 / 0.35);
-  border-radius: 9999px;
-  background:
-    radial-gradient(circle at 50% 50%, rgb(248 216 124 / 0.74) 0 0.18rem, transparent 0.22rem),
-    conic-gradient(from 26deg, transparent 0 22%, rgb(125 211 252 / 0.72) 23% 25%, transparent 26% 57%, rgb(141 227 200 / 0.6) 58% 60%, transparent 61% 100%),
-    rgb(125 211 252 / 0.08);
-  box-shadow: 0 0 30px rgb(125 211 252 / 0.18);
-}
-
-.brand-mark span {
-  color: white;
-  font-size: 0.6rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-shadow: 0 1px 8px rgb(0 0 0 / 0.65);
-}
-</style>
