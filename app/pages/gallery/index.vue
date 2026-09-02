@@ -107,15 +107,75 @@ const loadingMore = ref(false)
 const loadMoreError = ref('')
 const reachedEnd = ref(false)
 
+const images = computed(() => [...(firstPage.value ?? []), ...extraPages.value])
+const hasMore = computed(() => images.value.length > 0 && !reachedEnd.value)
+const isRefreshing = computed(() => imagesStatus.value === 'pending')
+
+// Infinite scroll: a sentinel below the grid is watched with an IntersectionObserver and the
+// next page is requested while the sentinel is still well below the viewport. The button is
+// only rendered as a fallback (observer unavailable, or a page failed to load).
+const loadMoreSentinel = ref<HTMLElement | null>(null)
+const autoLoadSupported = ref(true)
+let sentinelObserver: IntersectionObserver | undefined
+
+const maybeLoadMore = () => {
+  if (hasMore.value && !loadingMore.value && !loadMoreError.value && !isRefreshing.value) {
+    void loadMore()
+  }
+}
+
+// Observers only report changes, so after content is appended (or the list is reset) the
+// sentinel is re-observed to get a fresh report; tall viewports then keep filling.
+const rearmSentinel = async () => {
+  await nextTick()
+  const el = loadMoreSentinel.value
+  if (!sentinelObserver || !el) {
+    return
+  }
+  sentinelObserver.unobserve(el)
+  sentinelObserver.observe(el)
+}
+
+watch(loadMoreSentinel, (el, previous) => {
+  if (!sentinelObserver) {
+    return
+  }
+  if (previous) {
+    sentinelObserver.unobserve(previous)
+  }
+  if (el) {
+    sentinelObserver.observe(el)
+  }
+})
+
+onMounted(() => {
+  if (typeof IntersectionObserver === 'undefined') {
+    autoLoadSupported.value = false
+    return
+  }
+
+  sentinelObserver = new IntersectionObserver((entries) => {
+    if (entries.some(entry => entry.isIntersecting)) {
+      maybeLoadMore()
+    }
+  }, { rootMargin: '0px 0px 900px 0px' })
+
+  if (loadMoreSentinel.value) {
+    sentinelObserver.observe(loadMoreSentinel.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  sentinelObserver?.disconnect()
+  sentinelObserver = undefined
+})
+
 watch(firstPage, (page) => {
   extraPages.value = []
   loadMoreError.value = ''
   reachedEnd.value = (page?.length ?? 0) < PAGE_SIZE
+  void rearmSentinel()
 }, { immediate: true })
-
-const images = computed(() => [...(firstPage.value ?? []), ...extraPages.value])
-const hasMore = computed(() => images.value.length > 0 && !reachedEnd.value)
-const isRefreshing = computed(() => imagesStatus.value === 'pending')
 
 const loadMore = async () => {
   const last = images.value[images.value.length - 1]
@@ -145,6 +205,7 @@ const loadMore = async () => {
     loadMoreError.value = error instanceof Error ? error.message : 'Unable to load more images.'
   } finally {
     loadingMore.value = false
+    void rearmSentinel()
   }
 }
 
@@ -291,7 +352,11 @@ const onResetFilters = () => {
             />
           </div>
 
-          <div class="mt-8 flex flex-col items-center gap-3">
+          <div
+            ref="loadMoreSentinel"
+            class="mt-8 flex min-h-14 flex-col items-center justify-center gap-3"
+            aria-live="polite"
+          >
             <UAlert
               v-if="loadMoreError"
               class="w-full max-w-xl"
@@ -301,18 +366,29 @@ const onResetFilters = () => {
               :description="loadMoreError"
             />
             <UButton
-              v-if="hasMore"
+              v-if="hasMore && (loadMoreError || !autoLoadSupported)"
               size="lg"
               color="neutral"
               variant="subtle"
-              icon="i-lucide-chevrons-down"
+              :icon="loadMoreError ? 'i-lucide-rotate-cw' : 'i-lucide-chevrons-down'"
               :loading="loadingMore"
               @click="loadMore"
             >
-              Load more
+              {{ loadMoreError ? 'Retry' : 'Load more' }}
             </UButton>
+            <div
+              v-else-if="loadingMore"
+              class="flex items-center gap-2 text-sm text-slate-400"
+              role="status"
+            >
+              <UIcon
+                name="i-lucide-loader-circle"
+                class="size-4 animate-spin"
+              />
+              <span>Loading more images</span>
+            </div>
             <p
-              v-else
+              v-else-if="!hasMore"
               class="text-xs text-slate-500"
             >
               Showing all {{ images.length }} matching images.
