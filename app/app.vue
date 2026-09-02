@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import type { NavigationMenuItem } from '@nuxt/ui'
+import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
 const underConstruction = useRuntimeConfig().public.underConstruction
 
 useHead({
   titleTemplate: title => title ? `${title} | UCSB All Sky` : 'UCSB All Sky Camera',
   meta: [
-    { name: 'viewport', content: 'width=device-width, initial-scale=1' }
+    { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+    {
+      name: 'description',
+      content: 'All-sky camera imagery, seeing conditions, and plate-solve tools from the UCSB Deep Space Observatory.'
+    }
   ],
   htmlAttrs: {
     lang: 'en'
@@ -30,6 +34,14 @@ const menuItems = computed<NavigationMenuItem[]>(() => [
     to: '/'
   }
 ])
+
+const mobileMenuItems = computed<DropdownMenuItem[]>(() => menuItems.value.map(item => ({
+  label: item.label,
+  icon: item.icon,
+  to: item.to
+})))
+
+const currentYear = new Date().getFullYear()
 </script>
 
 <template>
@@ -62,15 +74,19 @@ const menuItems = computed<NavigationMenuItem[]>(() => [
           :items="menuItems"
           class="hidden md:flex"
         />
-        <UButton
+        <UDropdownMenu
           v-if="!underConstruction"
-          to="/gallery"
-          icon="i-lucide-images"
-          variant="subtle"
-          color="primary"
+          :items="mobileMenuItems"
+          :content="{ align: 'end' }"
           class="md:hidden"
-          aria-label="Open gallery"
-        />
+        >
+          <UButton
+            icon="i-lucide-menu"
+            variant="subtle"
+            color="neutral"
+            aria-label="Open navigation menu"
+          />
+        </UDropdownMenu>
       </template>
     </UHeader>
 
@@ -101,6 +117,44 @@ const menuItems = computed<NavigationMenuItem[]>(() => [
       </div>
       <NuxtPage v-else />
     </UMain>
+
+    <footer
+      v-if="!underConstruction"
+      class="border-t border-white/10 bg-slate-950/40"
+    >
+      <UContainer class="flex flex-col gap-6 py-8 text-sm text-slate-400 md:flex-row md:items-center md:justify-between">
+        <div class="flex items-center gap-3">
+          <span
+            class="brand-mark"
+            aria-hidden="true"
+          >
+            <span>DS</span>
+          </span>
+          <div>
+            <p class="font-bold text-slate-200">
+              UCSB Deep Space Observatory
+            </p>
+            <p class="text-xs">
+              All Sky Camera archive · Broida Hall, University of California, Santa Barbara
+            </p>
+          </div>
+        </div>
+        <nav
+          class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-semibold uppercase tracking-wider"
+          aria-label="Footer"
+        >
+          <NuxtLink
+            v-for="item in menuItems"
+            :key="item.label"
+            :to="item.to"
+            class="text-slate-400 no-underline transition hover:text-sky-200"
+          >
+            {{ item.label }}
+          </NuxtLink>
+          <span class="text-slate-600">© {{ currentYear }}</span>
+        </nav>
+      </UContainer>
+    </footer>
   </UApp>
 </template>
 

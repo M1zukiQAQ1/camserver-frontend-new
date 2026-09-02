@@ -5,7 +5,12 @@ import type { Camera } from '~/type/camera'
 import type { CameraImage } from '~/type/cameraImage'
 import type { ImageQuery } from '~/type/imageQuery'
 
+useHead({
+  title: 'Gallery'
+})
+
 const apiBase = useApiBase()
+const PAGE_SIZE = 60
 
 type SelectItem = {
   label: string
@@ -34,6 +39,8 @@ const searchTerm = ref('')
 const debouncedSearchTerm = ref('')
 const cameraItem = ref<SelectItem>(allCameraItem)
 const periodItem = ref<SelectItem>(allPeriodItem)
+const startDate = ref('')
+const endDate = ref('')
 let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined
 
 watch(searchTerm, (value) => {
@@ -54,7 +61,7 @@ onBeforeUnmount(() => {
 
 const imageQuery = computed<ImageQuery>(() => {
   const query: ImageQuery = {
-    pagesize: 60
+    pagesize: PAGE_SIZE
   }
 
   if (cameraItem.value.value !== allCameraItem.value) {
@@ -69,48 +76,110 @@ const imageQuery = computed<ImageQuery>(() => {
     query.period = periodItem.value.value
   }
 
+  if (startDate.value) {
+    query.startDate = `${startDate.value}T00:00:00`
+  }
+
+  if (endDate.value) {
+    query.endDate = `${endDate.value}T23:59:59`
+  }
+
   return query
 })
 
 const {
   data: cameras,
-  pending: camerasPending,
+  status: camerasStatus,
   error: camerasError
 } = await useFetch<Camera[]>(`${apiBase}/api/sites`)
 
 const {
-  data: images,
-  pending: imagesPending,
+  data: firstPage,
+  status: imagesStatus,
   error: imagesError
 } = await useFetch<CameraImage[]>(`${apiBase}/api/query`, {
   query: imageQuery
 })
 
+// Pages after the first are appended on demand using the API's imgId cursor (lastUID).
+const extraPages = ref<CameraImage[]>([])
+const loadingMore = ref(false)
+const loadMoreError = ref('')
+const reachedEnd = ref(false)
+
+watch(firstPage, (page) => {
+  extraPages.value = []
+  loadMoreError.value = ''
+  reachedEnd.value = (page?.length ?? 0) < PAGE_SIZE
+}, { immediate: true })
+
+const images = computed(() => [...(firstPage.value ?? []), ...extraPages.value])
+const hasMore = computed(() => images.value.length > 0 && !reachedEnd.value)
+const isRefreshing = computed(() => imagesStatus.value === 'pending')
+
+const loadMore = async () => {
+  const last = images.value[images.value.length - 1]
+  if (!last || loadingMore.value) {
+    return
+  }
+
+  const queryAtStart = imageQuery.value
+  loadingMore.value = true
+  loadMoreError.value = ''
+
+  try {
+    const page = await $fetch<CameraImage[]>(`${apiBase}/api/query`, {
+      query: { ...queryAtStart, lastUID: last.imgId }
+    })
+
+    // Filters changed while this page was in flight; the watcher already reset the list.
+    if (queryAtStart !== imageQuery.value) {
+      return
+    }
+
+    extraPages.value = [...extraPages.value, ...page]
+    if (page.length < PAGE_SIZE) {
+      reachedEnd.value = true
+    }
+  } catch (error) {
+    loadMoreError.value = error instanceof Error ? error.message : 'Unable to load more images.'
+  } finally {
+    loadingMore.value = false
+  }
+}
+
 const cameraItems = computed<SelectItem[]>(() => [
   allCameraItem,
   ...(cameras.value ?? []).map(cam => ({
     label: cam.siteName,
-    value: cam.UID
+    value: String(cam.uid)
   }))
 ])
 
-const filteredImages = computed(() => images.value ?? [])
+const siteNameFor = (image: CameraImage) =>
+  image.siteName
+  || cameras.value?.find(cam => cam.cameraId === image.cameraId)?.siteName
+  || 'Unknown site'
 
 const isInitialPending = computed(() =>
-  (camerasPending.value && !cameras.value)
-  || (imagesPending.value && !images.value)
+  (camerasStatus.value === 'pending' && !cameras.value)
+  || (imagesStatus.value === 'pending' && !firstPage.value)
 )
 
 const hasBlockingError = computed(() =>
   (camerasError.value && !cameras.value)
-  || (imagesError.value && !images.value)
+  || (imagesError.value && !firstPage.value)
 )
+
+const resultsLabel = computed(() => hasMore.value ? `${images.value.length}+` : String(images.value.length))
 
 const onResetFilters = () => {
   searchTerm.value = ''
   debouncedSearchTerm.value = ''
   cameraItem.value = allCameraItem
   periodItem.value = allPeriodItem
+  startDate.value = ''
+  endDate.value = ''
 }
 </script>
 
@@ -127,20 +196,20 @@ const onResetFilters = () => {
               All Sky Gallery
             </h1>
             <p class="mt-4 max-w-2xl text-base leading-7 text-slate-400 md:text-lg">
-              Browse all-sky captures by camera, sky period, location, and search terms.
+              Browse all-sky captures by camera, sky period, date, and search terms.
             </p>
           </div>
           <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div class="astro-panel-strong p-4 text-center">
-              <div class="text-2xl font-black text-sky-200">
-                {{ filteredImages.length }}
+              <div class="text-2xl font-black tabular-nums text-sky-200">
+                {{ resultsLabel }}
               </div>
               <div class="mt-1 text-[0.68rem] font-bold uppercase tracking-wider text-slate-500">
                 Results
               </div>
             </div>
             <div class="astro-panel-strong p-4 text-center">
-              <div class="text-2xl font-black text-emerald-200">
+              <div class="text-2xl font-black tabular-nums text-emerald-200">
                 {{ cameraItems.length - 1 }}
               </div>
               <div class="mt-1 text-[0.68rem] font-bold uppercase tracking-wider text-slate-500">
@@ -177,8 +246,8 @@ const onResetFilters = () => {
       <UAlert
         color="error"
         variant="subtle"
-        :title="camerasError?.message || imagesError?.message"
-        description="Please try again."
+        title="The archive could not be loaded."
+        :description="camerasError?.message || imagesError?.message || 'Please try again in a moment.'"
       />
     </div>
 
@@ -191,6 +260,8 @@ const onResetFilters = () => {
           v-model:search="searchTerm"
           v-model:period="periodItem"
           v-model:camera="cameraItem"
+          v-model:start-date="startDate"
+          v-model:end-date="endDate"
           :period-items="periodItems"
           :camera-items="cameraItems"
           @reset="onResetFilters"
@@ -199,8 +270,9 @@ const onResetFilters = () => {
 
       <main class="min-w-0 flex-1">
         <div
-          v-if="imagesPending"
+          v-if="isRefreshing"
           class="astro-panel mb-4 flex items-center gap-2 px-4 py-3 text-sm text-slate-300"
+          role="status"
         >
           <UIcon
             name="i-lucide-loader-circle"
@@ -209,24 +281,52 @@ const onResetFilters = () => {
           <span>Updating results</span>
         </div>
 
-        <div
-          v-if="filteredImages.length"
-          class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
-        >
-          <GalleryCard
-            v-for="image in filteredImages"
-            :key="image.imgId"
-            :image="image"
-            :site="cameras?.find((cam) => cam.cameraId === image.cameraId)?.siteName ?? 'Error'"
-          />
-        </div>
+        <template v-if="images.length">
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <GalleryCard
+              v-for="image in images"
+              :key="image.imgId"
+              :image="image"
+              :site="siteNameFor(image)"
+            />
+          </div>
+
+          <div class="mt-8 flex flex-col items-center gap-3">
+            <UAlert
+              v-if="loadMoreError"
+              class="w-full max-w-xl"
+              color="error"
+              variant="subtle"
+              title="Could not load more images."
+              :description="loadMoreError"
+            />
+            <UButton
+              v-if="hasMore"
+              size="lg"
+              color="neutral"
+              variant="subtle"
+              icon="i-lucide-chevrons-down"
+              :loading="loadingMore"
+              @click="loadMore"
+            >
+              Load more
+            </UButton>
+            <p
+              v-else
+              class="text-xs text-slate-500"
+            >
+              Showing all {{ images.length }} matching images.
+            </p>
+          </div>
+        </template>
+
         <UAlert
           v-else
           class="astro-panel p-2"
           color="neutral"
           variant="subtle"
           title="No images match the current filters."
-          description="Try a different camera, period, or search term."
+          description="Try a different camera, period, date range, or search term."
         />
       </main>
     </div>

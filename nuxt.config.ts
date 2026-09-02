@@ -2,8 +2,10 @@
 const nodeEnv = (globalThis as typeof globalThis & {
   process?: { env?: Record<string, string | undefined> }
 }).process?.env ?? {}
+// In production the backend exposes a plain-HTTP loopback connector for this proxy
+// (app.http.loopback-port); the public HTTPS port keeps its self-signed certificate.
 const defaultBackendApiBase = nodeEnv.NODE_ENV === 'production'
-  ? 'https://localhost:443'
+  ? 'http://127.0.0.1:8080'
   : 'http://localhost:443'
 
 export default defineNuxtConfig({

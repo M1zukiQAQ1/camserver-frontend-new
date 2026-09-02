@@ -16,15 +16,27 @@ defineProps<{
 const search = defineModel<string>('search', { required: true })
 const period = defineModel<SelectItem>('period', { required: true })
 const camera = defineModel<SelectItem>('camera', { required: true })
+const startDate = defineModel<string>('startDate', { required: true })
+const endDate = defineModel<string>('endDate', { required: true })
 
 const emit = defineEmits<{
   reset: []
 }>()
+
+const hasActiveFilters = computed(() =>
+  Boolean(search.value.trim())
+  || Boolean(startDate.value)
+  || Boolean(endDate.value)
+  || period.value.value !== 'all'
+  || camera.value.value !== 'all'
+)
+
+const labelClass = 'text-xs font-bold uppercase tracking-wider text-slate-400'
 </script>
 
 <template>
   <UCard
-    class="astro-panel sticky top-24"
+    class="astro-panel lg:sticky lg:top-24"
     :ui="{ body: 'p-4 sm:p-4' }"
   >
     <div class="mb-4 flex items-center justify-between gap-3">
@@ -41,48 +53,107 @@ const emit = defineEmits<{
         class="size-5 text-sky-200"
       />
     </div>
-    <UForm class="grid gap-4">
-      <UInput
-        v-model="search"
-        placeholder="cameras, locations, time"
-        icon="i-lucide-search"
-        color="neutral"
-        class="w-full"
-      />
-      <div class="grid gap-2">
-        <label class="text-xs font-bold uppercase tracking-wider text-slate-400">
-          Period
-        </label>
+
+    <div class="grid gap-4">
+      <UFormField
+        label="Search"
+        name="search"
+        :ui="{ label: labelClass }"
+      >
+        <UInput
+          v-model="search"
+          placeholder="Camera, site, time zone"
+          icon="i-lucide-search"
+          color="neutral"
+          class="w-full"
+          :ui="{ trailing: 'pe-1' }"
+        >
+          <template
+            v-if="search"
+            #trailing
+          >
+            <UButton
+              color="neutral"
+              variant="link"
+              size="sm"
+              icon="i-lucide-circle-x"
+              aria-label="Clear search"
+              @click="search = ''"
+            />
+          </template>
+        </UInput>
+      </UFormField>
+
+      <UFormField
+        label="Period"
+        name="period"
+        :ui="{ label: labelClass }"
+      >
         <USelectMenu
           v-model="period"
           icon="i-lucide-moon-star"
           class="w-full"
           :items="periodItems"
         />
-      </div>
-      <div class="grid gap-2">
-        <label class="text-xs font-bold uppercase tracking-wider text-slate-400">
-          Camera
-        </label>
+      </UFormField>
+
+      <UFormField
+        label="Camera"
+        name="camera"
+        :ui="{ label: labelClass }"
+      >
         <USelectMenu
           v-model="camera"
           icon="i-lucide-camera"
           class="w-full"
           :items="cameraItems"
         />
+      </UFormField>
+
+      <div class="grid grid-cols-2 gap-3">
+        <UFormField
+          label="From"
+          name="startDate"
+          :ui="{ label: labelClass }"
+        >
+          <UInput
+            v-model="startDate"
+            type="date"
+            color="neutral"
+            class="w-full"
+            :max="endDate || undefined"
+          />
+        </UFormField>
+        <UFormField
+          label="To"
+          name="endDate"
+          :ui="{ label: labelClass }"
+        >
+          <UInput
+            v-model="endDate"
+            type="date"
+            color="neutral"
+            class="w-full"
+            :min="startDate || undefined"
+          />
+        </UFormField>
       </div>
-      <div class="flex items-center border-t border-white/10 pt-4">
+
+      <div class="flex items-center justify-between gap-3 border-t border-white/10 pt-4">
+        <span class="text-xs text-slate-500">
+          {{ hasActiveFilters ? 'Filters active' : 'Showing everything' }}
+        </span>
         <UButton
           type="button"
-          class="ml-auto"
           color="neutral"
           variant="subtle"
           icon="i-lucide-rotate-ccw"
+          :disabled="!hasActiveFilters"
           @click="emit('reset')"
         >
           Reset
         </UButton>
       </div>
-    </UForm>
+    </div>
   </UCard>
 </template>

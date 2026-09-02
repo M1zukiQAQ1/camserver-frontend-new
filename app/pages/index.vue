@@ -1,27 +1,47 @@
 <script setup lang="ts">
+import type { Camera } from '~/type/camera'
 import type { CameraImage } from '~/type/cameraImage'
 import type { ImageQuery } from '~/type/imageQuery'
+import { formatDate } from '~/utils/formatDateTime'
 import { getImageFileName } from '~/utils/getImageFileName'
 import { getImagePeriod } from '~/utils/getImagePeriod'
 
 const apiBase = useApiBase()
+const FALLBACK_HERO = '/img1.jpg'
 
-const query: ImageQuery = {
+const featuredQuery: ImageQuery = {
   featured: true
 }
 
-const { data: featData, pending, error } = await useFetch<CameraImage[]>(`${apiBase}/api/query`, {
-  query
+const { data: featData, status, error } = await useFetch<CameraImage[]>(`${apiBase}/api/query`, {
+  query: featuredQuery
+})
+
+// Secondary data for the hero stat tiles; the page renders fine without it.
+const { data: sites } = useLazyFetch<Camera[]>(`${apiBase}/api/sites`)
+const { data: latestFrames } = useLazyFetch<CameraImage[]>(`${apiBase}/api/query`, {
+  query: { pagesize: 1 }
 })
 
 const featuredImages = computed(() => featData.value ?? [])
+const isPending = computed(() => status.value === 'pending')
+
+const heroImageFailed = ref(false)
 
 const heroImageUrl = computed(() => {
   const image = featuredImages.value[0]
-  return image
-    ? `${apiBase}/api/images/${getImageFileName(image.imgPath)}.jpg`
-    : '/img1.jpg'
+  return image && !heroImageFailed.value
+    ? imageUrlFor(image)
+    : FALLBACK_HERO
 })
+
+const siteCount = computed(() => sites.value?.length ?? null)
+const latestCaptureLabel = computed(() => {
+  const latest = latestFrames.value?.[0]
+  return latest ? formatDate(latest.timestamp) : null
+})
+
+const imageUrlFor = (image: CameraImage) => `${apiBase}/api/images/${getImageFileName(image.imgPath)}.jpg`
 </script>
 
 <template>
@@ -29,8 +49,10 @@ const heroImageUrl = computed(() => {
     <section class="relative isolate overflow-hidden">
       <img
         :src="heroImageUrl"
-        alt="All-sky camera frame"
+        alt=""
+        aria-hidden="true"
         class="absolute inset-0 -z-10 h-full w-full object-cover opacity-45 saturate-125"
+        @error="heroImageFailed = true"
       >
       <div class="absolute inset-0 -z-10 bg-gradient-to-b from-slate-950/40 via-slate-950/82 to-slate-950" />
 
@@ -55,13 +77,13 @@ const heroImageUrl = computed(() => {
               Open Gallery
             </UButton>
             <UButton
-              to="/gallery"
+              to="/seeing-monitor"
               size="xl"
               color="neutral"
               variant="subtle"
-              icon="i-lucide-sparkles"
+              icon="i-lucide-radio-tower"
             >
-              Explore Captures
+              Seeing Monitor
             </UButton>
           </div>
         </div>
@@ -72,31 +94,32 @@ const heroImageUrl = computed(() => {
               :src="heroImageUrl"
               alt="Latest featured all-sky capture"
               class="aspect-square w-full object-cover saturate-125"
+              @error="heroImageFailed = true"
             >
           </div>
           <div class="mt-4 grid grid-cols-3 gap-2 text-center">
             <div class="rounded-lg border border-white/10 bg-white/[0.04] p-3">
-              <div class="text-lg font-black text-sky-200">
-                180
+              <div class="text-lg font-black tabular-nums text-sky-200">
+                {{ siteCount ?? '--' }}
               </div>
               <div class="text-[0.68rem] font-bold uppercase tracking-wider text-slate-400">
-                Dome deg
+                Sites
               </div>
             </div>
             <div class="rounded-lg border border-white/10 bg-white/[0.04] p-3">
-              <div class="text-lg font-black text-amber-200">
-                Live
+              <div class="text-lg font-black tabular-nums text-amber-200">
+                {{ featuredImages.length }}
               </div>
               <div class="text-[0.68rem] font-bold uppercase tracking-wider text-slate-400">
-                Feed
+                Featured
               </div>
             </div>
             <div class="rounded-lg border border-white/10 bg-white/[0.04] p-3">
-              <div class="text-lg font-black text-emerald-200">
-                WCS
+              <div class="text-sm font-black leading-6 text-emerald-200">
+                {{ latestCaptureLabel ?? '--' }}
               </div>
               <div class="text-[0.68rem] font-bold uppercase tracking-wider text-slate-400">
-                Solve
+                Latest frame
               </div>
             </div>
           </div>
@@ -125,7 +148,7 @@ const heroImageUrl = computed(() => {
       </div>
 
       <div
-        v-if="pending"
+        v-if="isPending"
         class="astro-panel grid min-h-56 place-items-center"
       >
         <UIcon
@@ -141,8 +164,8 @@ const heroImageUrl = computed(() => {
         <UAlert
           color="error"
           variant="subtle"
-          :title="error?.message"
-          description="Please try again."
+          title="Featured frames could not be loaded."
+          :description="error?.message || 'Please try again in a moment.'"
         />
       </div>
 
@@ -164,9 +187,11 @@ const heroImageUrl = computed(() => {
             class="group block overflow-hidden rounded-lg border border-white/10 bg-slate-950/70 text-current no-underline"
           >
             <img
-              :src="`${apiBase}/api/images/${getImageFileName(item.imgPath)}.jpg`"
+              :src="imageUrlFor(item)"
               :alt="`${item.siteName} ${getImagePeriod(item.timestamp)} capture`"
-              class="aspect-[4/3] w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+              loading="lazy"
+              decoding="async"
+              class="aspect-[4/3] w-full bg-black object-cover transition duration-300 group-hover:scale-[1.03]"
             >
             <div class="flex items-center justify-between gap-3 p-3">
               <div class="min-w-0">
@@ -174,7 +199,7 @@ const heroImageUrl = computed(() => {
                   {{ item.siteName }}
                 </p>
                 <p class="text-xs text-slate-400">
-                  {{ getImagePeriod(item.timestamp) }}
+                  {{ getImagePeriod(item.timestamp) }} · {{ formatDate(item.timestamp) }}
                 </p>
               </div>
               <UIcon

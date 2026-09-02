@@ -1,12 +1,23 @@
 <script setup lang="ts">
 import type { CameraImage } from '~/type/cameraImage'
 import type { PlateSolveCrop, PlateSolveResult, PlateSolveStar } from '~/type/plateSolve'
+import { formatDateTime } from '~/utils/formatDateTime'
 import { getImageFileName } from '~/utils/getImageFileName'
 import { getImagePeriod } from '~/utils/getImagePeriod'
+
+type ArchiveFileInfo = {
+  fileName: string
+  exists: boolean
+  gzipped: boolean
+  storedAs: string | null
+  sizeBytes: number
+  modifiedAt: string | null
+}
 
 const route = useRoute()
 const apiBase = useApiBase()
 const imgId = computed(() => String(route.params.imgId))
+const imageFailed = ref(false)
 const plateSolve = ref<PlateSolveResult | null>(null)
 const plateSolvePending = ref(false)
 const plateSolveError = ref('')
@@ -119,20 +130,43 @@ const {
   key: `gallery-image-${imgId.value}`
 })
 
-const imageUrl = computed(() => {
-  if (!image.value) {
+const imageFileName = computed(() => image.value ? getImageFileName(image.value.imgPath) ?? '' : '')
+
+const imageUrl = computed(() => imageFileName.value ? `${apiBase}/api/images/${imageFileName.value}.jpg` : '')
+
+// The raw FITS frame is offered gzip-compressed; the backend compresses on the fly if needed.
+const fitsDownloadUrl = computed(() => imageFileName.value ? `${apiBase}/api/images/${imageFileName.value}.fits.gz` : '')
+
+const { data: fitsInfo } = useLazyFetch<ArchiveFileInfo>(
+  () => `${apiBase}/api/archive/files/${imageFileName.value}.fits`,
+  {
+    key: `gallery-fits-${imgId.value}`,
+    immediate: Boolean(imageFileName.value),
+    watch: [imageFileName]
+  }
+)
+
+const hasFits = computed(() => Boolean(fitsInfo.value?.exists && fitsInfo.value.sizeBytes > 0))
+
+const fitsSizeLabel = computed(() => {
+  const bytes = fitsInfo.value?.sizeBytes ?? 0
+  if (!bytes) {
     return ''
   }
 
-  return `${apiBase}/api/images/${getImageFileName(image.value.imgPath)}.jpg`
+  return bytes >= 1024 * 1024
+    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`
 })
 
-const capturedAt = computed(() => {
-  if (!image.value) {
-    return ''
-  }
+const capturedAt = computed(() => image.value ? formatDateTime(image.value.timestamp) : '')
 
-  return new Date(image.value.timestamp).toLocaleString()
+useHead({
+  title: computed(() => image.value ? `${image.value.siteName} · ${capturedAt.value}` : 'Image')
+})
+
+watch(imageUrl, () => {
+  imageFailed.value = false
 })
 
 const period = computed(() => image.value ? getImagePeriod(image.value.timestamp) : '')
@@ -156,7 +190,13 @@ const rightParams = computed(() => image.value
       { label: 'Temperature', value: `${image.value.temperature} C` },
       { label: 'Humidity', value: `${image.value.humidity}%` },
       { label: 'Image ID', value: image.value.imgId },
-      { label: 'File', value: getImageFileName(image.value.imgPath) }
+      { label: 'File', value: imageFileName.value },
+      {
+        label: 'FITS on server',
+        value: fitsInfo.value
+          ? (hasFits.value ? `${fitsSizeLabel.value}${fitsInfo.value.gzipped ? ' (gzip archived)' : ''}` : 'Not available')
+          : 'Checking'
+      }
     ]
   : []
 )
@@ -702,13 +742,43 @@ onBeforeUnmount(() => {
       <div class="flex flex-wrap items-center gap-3">
         <UButton
           :loading="isPlateSolving"
-          :disabled="isPlateSolving"
+          :disabled="isPlateSolving || imageFailed"
           icon="i-lucide-sparkles"
           color="primary"
           @click="startPlateSolve"
         >
           Plate Solve
         </UButton>
+
+        <UDropdownMenu
+          :items="[
+            {
+              label: 'JPEG preview',
+              icon: 'i-lucide-image',
+              to: imageUrl,
+              target: '_blank',
+              disabled: !imageUrl || imageFailed
+            },
+            {
+              label: hasFits ? `FITS frame (.gz, ${fitsSizeLabel})` : 'FITS frame unavailable',
+              icon: 'i-lucide-file-archive',
+              to: fitsDownloadUrl,
+              target: '_blank',
+              disabled: !hasFits
+            }
+          ]"
+          :content="{ align: 'start' }"
+        >
+          <UButton
+            :disabled="!image"
+            icon="i-lucide-download"
+            color="neutral"
+            variant="subtle"
+            trailing-icon="i-lucide-chevron-down"
+          >
+            Download
+          </UButton>
+        </UDropdownMenu>
 
         <UButton
           :disabled="!hasPlateSolveResult"
@@ -806,10 +876,29 @@ onBeforeUnmount(() => {
             class="plate-solve-stage relative max-h-[75vh] max-w-full"
             :style="plateSolveStageStyle"
           >
+            <div
+              v-if="imageFailed"
+              class="grid aspect-[4/3] w-[min(100%,720px)] place-items-center p-8 text-center text-slate-400"
+            >
+              <div class="flex flex-col items-center gap-3">
+                <UIcon
+                  name="i-lucide-image-off"
+                  class="size-10"
+                />
+                <p class="text-sm font-semibold text-slate-200">
+                  Image data unavailable
+                </p>
+                <p class="max-w-xs text-xs leading-5">
+                  This frame's file is missing or empty on the server, so it cannot be displayed or plate-solved.
+                </p>
+              </div>
+            </div>
             <img
+              v-else
               :src="imageUrl"
               :alt="`${image.siteName} all sky capture ${capturedAt}`"
               class="block max-h-[75vh] max-w-full object-contain"
+              @error="imageFailed = true"
             >
 
             <div

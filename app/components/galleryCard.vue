@@ -1,10 +1,7 @@
 <script setup lang="ts">
-// const props = defineProps({
-//     resUrl: String
-// })
-// const data = await useLazyFetch('/api/hello')
-
 import type { CameraImage } from '~/type/cameraImage'
+import { formatDateTime } from '~/utils/formatDateTime'
+import { getImageFileName } from '~/utils/getImageFileName'
 import { getImagePeriod } from '~/utils/getImagePeriod'
 
 const props = defineProps<{
@@ -13,9 +10,18 @@ const props = defineProps<{
 }>()
 
 const apiBase = useApiBase()
-const filePath = `${apiBase}/api/images/${props.image.imgPath.split('/').pop()}.jpg`
-const dateString = `${new Date(props.image.timestamp).toLocaleDateString()} ${new Date(props.image.timestamp).toLocaleTimeString()}`
-const period = getImagePeriod(props.image.timestamp)
+
+const filePath = computed(() => `${apiBase}/api/images/${getImageFileName(props.image.imgPath)}.jpg`)
+const capturedAt = computed(() => formatDateTime(props.image.timestamp))
+const period = computed(() => getImagePeriod(props.image.timestamp))
+
+const imageLoaded = ref(false)
+const imageFailed = ref(false)
+
+watch(filePath, () => {
+  imageLoaded.value = false
+  imageFailed.value = false
+})
 </script>
 
 <template>
@@ -23,16 +29,45 @@ const period = getImagePeriod(props.image.timestamp)
     :to="`/gallery/${image.imgId}`"
     class="group block w-full overflow-hidden rounded-lg border border-white/10 bg-slate-950/70 text-current no-underline shadow-[0_18px_48px_rgb(0_0_0_/_0.28)] transition duration-200 hover:-translate-y-1 hover:border-sky-300/40 hover:shadow-[0_24px_70px_rgb(0_0_0_/_0.38)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
   >
-    <div class="relative overflow-hidden bg-black">
+    <div class="relative aspect-[4/3] overflow-hidden bg-black">
+      <div
+        v-if="!imageLoaded && !imageFailed"
+        class="absolute inset-0 animate-pulse bg-slate-900/80"
+        aria-hidden="true"
+      />
+
       <img
+        v-if="!imageFailed"
         :src="filePath"
         :alt="`${site} ${period} all-sky capture`"
-        class="aspect-[4/3] w-full object-cover saturate-125 transition duration-300 group-hover:scale-[1.035]"
+        loading="lazy"
+        decoding="async"
+        class="h-full w-full object-cover saturate-125 transition duration-300 group-hover:scale-[1.035]"
+        :class="imageLoaded ? 'opacity-100' : 'opacity-0'"
+        @load="imageLoaded = true"
+        @error="imageFailed = true"
       >
+
+      <div
+        v-else
+        class="absolute inset-0 grid place-items-center text-slate-500"
+      >
+        <div class="flex flex-col items-center gap-2">
+          <UIcon
+            name="i-lucide-image-off"
+            class="size-8"
+          />
+          <span class="text-[0.68rem] font-bold uppercase tracking-wider">
+            Preview unavailable
+          </span>
+        </div>
+      </div>
+
       <div class="absolute left-3 top-3 rounded-md border border-white/10 bg-slate-950/70 px-2 py-1 text-[0.68rem] font-black uppercase tracking-wider text-emerald-200 backdrop-blur">
         {{ period }}
       </div>
     </div>
+
     <div class="grid gap-3 p-4">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
@@ -40,7 +75,7 @@ const period = getImagePeriod(props.image.timestamp)
             {{ site }}
           </h3>
           <p class="mt-1 text-xs text-slate-400">
-            {{ dateString }}
+            {{ capturedAt }}
           </p>
         </div>
         <UIcon

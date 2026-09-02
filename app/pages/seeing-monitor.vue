@@ -254,10 +254,11 @@ onBeforeUnmount(() => {
             class="grid gap-4"
             @submit.prevent="saveSettings"
           >
-            <div class="grid gap-2">
-              <label class="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Exposure (microseconds)
-              </label>
+            <UFormField
+              label="Exposure (microseconds)"
+              name="exposure"
+              :ui="{ label: 'text-xs font-bold uppercase tracking-wider text-slate-400' }"
+            >
               <UInputNumber
                 v-model="exposure"
                 :min="100"
@@ -265,12 +266,13 @@ onBeforeUnmount(() => {
                 :step="1"
                 class="w-full"
               />
-            </div>
+            </UFormField>
 
-            <div class="grid gap-2">
-              <label class="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Gain
-              </label>
+            <UFormField
+              label="Gain"
+              name="gain"
+              :ui="{ label: 'text-xs font-bold uppercase tracking-wider text-slate-400' }"
+            >
               <UInputNumber
                 v-model="gain"
                 :min="1"
@@ -278,7 +280,7 @@ onBeforeUnmount(() => {
                 :step="1"
                 class="w-full"
               />
-            </div>
+            </UFormField>
 
             <UButton
               type="submit"

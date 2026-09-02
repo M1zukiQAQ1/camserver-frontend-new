@@ -1,8 +1,9 @@
+// Shape of /api/sites as served by the backend (Jackson lower-cases the UID getter).
 export interface Camera {
-  UID: string
-  cameraId: string
+  uid: number
+  cameraId: string | null
   siteName: string
-  timeZone: string
-  longitude: number
-  latitude: number
+  timeZone: string | null
+  longitude: number | null
+  latitude: number | null
 }
