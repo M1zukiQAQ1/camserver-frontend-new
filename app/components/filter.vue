@@ -64,7 +64,6 @@ const labelClass = 'text-xs font-bold uppercase tracking-wider text-slate-400'
           v-model="search"
           placeholder="Camera, site, time zone"
           icon="i-lucide-search"
-          color="neutral"
           class="w-full"
           :ui="{ trailing: 'pe-1' }"
         >
@@ -119,7 +118,6 @@ const labelClass = 'text-xs font-bold uppercase tracking-wider text-slate-400'
           <UInput
             v-model="startDate"
             type="date"
-            color="neutral"
             class="w-full"
             :max="endDate || undefined"
           />
@@ -132,7 +130,6 @@ const labelClass = 'text-xs font-bold uppercase tracking-wider text-slate-400'
           <UInput
             v-model="endDate"
             type="date"
-            color="neutral"
             class="w-full"
             :min="startDate || undefined"
           />

@@ -13,7 +13,9 @@ useHead({
     }
   ],
   htmlAttrs: {
-    lang: 'en'
+    lang: 'en',
+    // Nuxt UI's dark variants key on this class; color mode switching is disabled in nuxt.config.
+    class: 'dark'
   }
 })
 

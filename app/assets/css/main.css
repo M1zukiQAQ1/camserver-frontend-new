@@ -33,9 +33,50 @@
   --sky-rose: #f29aa3;
 }
 
+/*
+ * Nuxt UI design tokens, retuned to the night-sky palette. The `dark` class is pinned on
+ * <html> in app.vue, so every UInput, USelectMenu, UButton, UDropdownMenu, UAlert, etc.
+ * picks these up instead of the stock light/slate surfaces.
+ */
+.dark {
+  --ui-bg: rgb(6 13 26 / 0.92);
+  --ui-bg-muted: rgb(11 21 39 / 0.92);
+  --ui-bg-elevated: rgb(16 29 52 / 0.96);
+  --ui-bg-accented: rgb(26 45 78 / 0.96);
+  --ui-bg-inverted: var(--sky-text);
+  --ui-text-dimmed: #6d7f99;
+  --ui-text-muted: var(--sky-muted);
+  --ui-text-toned: #c5d4e8;
+  --ui-text: var(--sky-text);
+  --ui-text-highlighted: #ffffff;
+  --ui-text-inverted: var(--sky-void);
+  --ui-border: var(--sky-line);
+  --ui-border-muted: rgb(184 206 233 / 0.12);
+  --ui-border-accented: rgb(184 206 233 / 0.26);
+  --ui-border-inverted: var(--sky-text);
+  --ui-radius: 0.3rem;
+}
+
 html {
   min-height: 100%;
   background: var(--sky-void);
+}
+
+/* Native form controls (date pickers etc.) follow the dark palette instead of the OS theme. */
+input,
+select,
+textarea,
+button {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 body {

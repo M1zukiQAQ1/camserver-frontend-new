@@ -20,6 +20,12 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
+  // The site is a fixed dark design; app.vue pins the `dark` class on <html> and main.css
+  // retunes the Nuxt UI tokens, so the OS light/dark preference must not flip components.
+  ui: {
+    colorMode: false
+  },
+
   runtimeConfig: {
     backendApiBase: nodeEnv.NUXT_BACKEND_API_BASE || defaultBackendApiBase,
     backendTlsVerify: nodeEnv.NUXT_BACKEND_TLS_VERIFY === 'true',
