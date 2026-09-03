@@ -9,6 +9,7 @@ type ArchiveFileInfo = {
   fileName: string
   exists: boolean
   gzipped: boolean
+  format: 'plain' | 'gzip' | 'rice' | null
   storedAs: string | null
   sizeBytes: number
   modifiedAt: string | null
@@ -134,9 +135,6 @@ const imageFileName = computed(() => image.value ? getImageFileName(image.value.
 
 const imageUrl = computed(() => imageFileName.value ? `${apiBase}/api/images/${imageFileName.value}.jpg` : '')
 
-// The raw FITS frame is offered gzip-compressed; the backend compresses on the fly if needed.
-const fitsDownloadUrl = computed(() => imageFileName.value ? `${apiBase}/api/images/${imageFileName.value}.fits.gz` : '')
-
 const { data: fitsInfo } = useLazyFetch<ArchiveFileInfo>(
   () => `${apiBase}/api/archive/files/${imageFileName.value}.fits`,
   {
@@ -147,6 +145,14 @@ const { data: fitsInfo } = useLazyFetch<ArchiveFileInfo>(
 )
 
 const hasFits = computed(() => Boolean(fitsInfo.value?.exists && fitsInfo.value.sizeBytes > 0))
+
+// Rice-archived frames are downloaded as stored (.fits.fz is itself a valid FITS file);
+// anything else is offered gzip-compressed, which the backend produces on the fly if needed.
+const fitsIsRice = computed(() => fitsInfo.value?.format === 'rice')
+const fitsDownloadUrl = computed(() => imageFileName.value
+  ? `${apiBase}/api/images/${imageFileName.value}.fits${fitsIsRice.value ? '.fz' : '.gz'}`
+  : '')
+const fitsFormatLabel = computed(() => fitsIsRice.value ? ' · Rice' : fitsInfo.value?.gzipped ? ' · gzip' : '')
 
 const fitsSizeLabel = computed(() => {
   const bytes = fitsInfo.value?.sizeBytes ?? 0
@@ -216,7 +222,7 @@ const sensorParams = computed<FrameParam[]>(() => image.value
       {
         label: 'FITS frame',
         value: fitsInfo.value
-          ? (hasFits.value ? `${fitsSizeLabel.value}${fitsInfo.value.gzipped ? ' · gzip' : ''}` : 'Not available')
+          ? (hasFits.value ? `${fitsSizeLabel.value}${fitsFormatLabel.value}` : 'Not available')
           : 'Checking',
         icon: 'i-lucide-file-archive'
       }
@@ -796,7 +802,7 @@ onBeforeUnmount(() => {
               disabled: !imageUrl || imageFailed
             },
             {
-              label: hasFits ? `FITS frame (.gz, ${fitsSizeLabel})` : 'FITS frame unavailable',
+              label: hasFits ? `FITS frame (${fitsIsRice ? '.fz, Rice' : '.gz'}, ${fitsSizeLabel})` : 'FITS frame unavailable',
               icon: 'i-lucide-file-archive',
               to: fitsDownloadUrl,
               target: '_blank',
