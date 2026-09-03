@@ -3,7 +3,15 @@ import { useRuntimeConfig } from '#imports'
 
 const backendRoutePrefix = '/api/backend'
 
-export default defineEventHandler((event) => {
+/**
+ * Forwards /api/backend/** to the Spring backend.
+ *
+ * The timeout only covers the wait for response headers: bodies stream for as long as the
+ * backend keeps sending, which the seeing-monitor video (/api/live/stream.mp4) and large FITS
+ * downloads need. When the browser drops the connection the upstream request is aborted so the
+ * backend stops producing a stream nobody is watching.
+ */
+export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig(event)
   const backendBase = String(config.backendApiBase || '').replace(/\/+$/, '')
 
@@ -18,11 +26,36 @@ export default defineEventHandler((event) => {
   const targetUrl = buildTargetUrl(backendBase, requestUrl)
   const timeoutMs = Number(config.backendProxyTimeoutMs || 30000)
 
-  return proxyRequest(event, targetUrl.toString(), {
-    fetchOptions: {
-      signal: AbortSignal.timeout(timeoutMs)
+  const upstream = new AbortController()
+  const abortUpstream = () => upstream.abort()
+  let headersTimer: ReturnType<typeof setTimeout> | undefined = setTimeout(abortUpstream, timeoutMs)
+  const clearHeadersTimer = () => {
+    if (headersTimer) {
+      clearTimeout(headersTimer)
+      headersTimer = undefined
     }
-  })
+  }
+
+  event.node.res.on('close', abortUpstream)
+
+  try {
+    return await proxyRequest(event, targetUrl.toString(), {
+      fetchOptions: {
+        signal: upstream.signal
+      },
+      onResponse: clearHeadersTimer
+    })
+  } catch (error) {
+    if (upstream.signal.aborted && event.node.res.headersSent) {
+      // The client went away while the body was streaming; there is nobody left to answer.
+      event.node.res.end()
+      return
+    }
+    throw error
+  } finally {
+    clearHeadersTimer()
+    event.node.res.off('close', abortUpstream)
+  }
 })
 
 function buildTargetUrl(backendBase: string, requestUrl: URL) {
