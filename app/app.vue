@@ -12,6 +12,12 @@ useHead({
       content: 'All-sky camera imagery, seeing conditions, and plate-solve tools from the UCSB Deep Space Observatory.'
     }
   ],
+  link: [
+    { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
+    { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32x32.png' },
+    { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/favicon-192x192.png' },
+    { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' }
+  ],
   htmlAttrs: {
     lang: 'en',
     // Nuxt UI's dark variants key on this class; color mode switching is disabled in nuxt.config.
