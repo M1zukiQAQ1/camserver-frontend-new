@@ -76,6 +76,7 @@ const imageQuery = computed<ImageQuery>(() => {
     query.period = periodItem.value.value
   }
 
+  // Day bounds go out as wall-clock times; the backend applies them in each site's own time zone.
   if (startDate.value) {
     query.startDate = `${startDate.value}T00:00:00`
   }

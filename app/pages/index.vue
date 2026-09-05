@@ -38,7 +38,7 @@ const heroImageUrl = computed(() => {
 const siteCount = computed(() => sites.value?.length ?? null)
 const latestCaptureLabel = computed(() => {
   const latest = latestFrames.value?.[0]
-  return latest ? formatDate(latest.timestamp) : null
+  return latest ? formatDate(latest.timestamp, latest.timeZone) : null
 })
 
 const imageUrlFor = (image: CameraImage) => `${apiBase}/api/images/${getImageFileName(image.imgPath)}.jpg`
@@ -188,7 +188,7 @@ const imageUrlFor = (image: CameraImage) => `${apiBase}/api/images/${getImageFil
           >
             <img
               :src="imageUrlFor(item)"
-              :alt="`${item.siteName} ${getImagePeriod(item.timestamp)} capture`"
+              :alt="`${item.siteName} ${getImagePeriod(item.timestamp, item.timeZone)} capture`"
               loading="lazy"
               decoding="async"
               class="aspect-[4/3] w-full bg-black object-cover transition duration-300 group-hover:scale-[1.03]"
@@ -199,7 +199,7 @@ const imageUrlFor = (image: CameraImage) => `${apiBase}/api/images/${getImageFil
                   {{ item.siteName }}
                 </p>
                 <p class="text-xs text-slate-400">
-                  {{ getImagePeriod(item.timestamp) }} · {{ formatDate(item.timestamp) }}
+                  {{ getImagePeriod(item.timestamp, item.timeZone) }} · {{ formatDate(item.timestamp, item.timeZone) }}
                 </p>
               </div>
               <UIcon

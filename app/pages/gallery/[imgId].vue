@@ -165,7 +165,7 @@ const fitsSizeLabel = computed(() => {
     : `${Math.max(1, Math.round(bytes / 1024))} KB`
 })
 
-const capturedAt = computed(() => image.value ? formatDateTime(image.value.timestamp) : '')
+const capturedAt = computed(() => image.value ? formatDateTime(image.value.timestamp, image.value.timeZone) : '')
 
 useHead({
   title: computed(() => image.value ? `${image.value.siteName} · ${capturedAt.value}` : 'Image')
@@ -175,7 +175,7 @@ watch(imageUrl, () => {
   imageFailed.value = false
 })
 
-const period = computed(() => image.value ? getImagePeriod(image.value.timestamp) : '')
+const period = computed(() => image.value ? getImagePeriod(image.value.timestamp, image.value.timeZone) : '')
 
 type FrameParam = {
   label: string
