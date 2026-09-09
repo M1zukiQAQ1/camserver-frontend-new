@@ -39,14 +39,22 @@ const menuItems = computed<NavigationMenuItem[]>(() => [
   {
     label: 'Star Tracker',
     icon: 'i-lucide-crosshair',
-    to: '/'
+    disabled: true,
+    ui: { linkLabel: 'line-through' }
+  },
+  {
+    label: 'Health',
+    icon: 'i-lucide-activity',
+    to: '/health'
   }
 ])
 
 const mobileMenuItems = computed<DropdownMenuItem[]>(() => menuItems.value.map(item => ({
   label: item.label,
   icon: item.icon,
-  to: item.to
+  to: item.to,
+  disabled: item.disabled,
+  ui: { itemLabel: item.ui?.linkLabel }
 })))
 
 const currentYear = new Date().getFullYear()
@@ -137,14 +145,25 @@ const currentYear = new Date().getFullYear()
           class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-semibold uppercase tracking-wider"
           aria-label="Footer"
         >
-          <NuxtLink
+          <template
             v-for="item in menuItems"
             :key="item.label"
-            :to="item.to"
-            class="text-slate-400 no-underline transition hover:text-sky-200"
           >
-            {{ item.label }}
-          </NuxtLink>
+            <span
+              v-if="item.disabled"
+              aria-disabled="true"
+              class="text-slate-500 line-through"
+            >
+              {{ item.label }}
+            </span>
+            <NuxtLink
+              v-else
+              :to="item.to"
+              class="text-slate-400 no-underline transition hover:text-sky-200"
+            >
+              {{ item.label }}
+            </NuxtLink>
+          </template>
           <span class="text-slate-600">© {{ currentYear }}</span>
         </nav>
       </UContainer>

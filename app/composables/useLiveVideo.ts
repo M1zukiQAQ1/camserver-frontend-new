@@ -25,6 +25,7 @@ const LIVE_EDGE_OFFSET_SECONDS = 0.4
 const KEEP_BEHIND_SECONDS = 20
 const OFFLINE_RETRY_MS = 3000
 const MAX_RETRY_MS = 10000
+const STREAM_STALL_MS = 12000
 const DEFAULT_CODECS = 'avc1.64001F'
 
 /**
@@ -44,6 +45,7 @@ export const useLiveVideo = (streamUrl: MaybeRefOrGetter<string>) => {
   let connection: Connection | null = null
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let countdownTimer: ReturnType<typeof setInterval> | undefined
+  let streamWatchdog: ReturnType<typeof setInterval> | undefined
   let failures = 0
   let listenersAttached = false
 
@@ -85,6 +87,10 @@ export const useLiveVideo = (streamUrl: MaybeRefOrGetter<string>) => {
   }
 
   const closeConnection = () => {
+    if (streamWatchdog) {
+      clearInterval(streamWatchdog)
+      streamWatchdog = undefined
+    }
     const current = connection
     connection = null
     if (current) {
@@ -335,6 +341,17 @@ export const useLiveVideo = (streamUrl: MaybeRefOrGetter<string>) => {
       state.value = 'buffering'
       failures = 0
 
+      // A proxy can leave the response open after its producer disappears. In
+      // that case reader.read() never finishes and the player buffers forever.
+      let lastDataAt = Date.now()
+      streamWatchdog = setInterval(() => {
+        if (current === connection && Date.now() - lastDataAt > STREAM_STALL_MS) {
+          closeConnection()
+          setOffline('The video stopped arriving. Reconnecting to the camera.')
+          scheduleRetry(1000)
+        }
+      }, 1000)
+
       const reader = response.body.getReader()
       while (true) {
         const { done, value } = await reader.read()
@@ -345,6 +362,7 @@ export const useLiveVideo = (streamUrl: MaybeRefOrGetter<string>) => {
           break
         }
         if (value) {
+          lastDataAt = Date.now()
           bytesReceived.value += value.byteLength
           enqueue(current, value)
         }

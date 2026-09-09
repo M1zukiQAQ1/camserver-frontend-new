@@ -29,6 +29,7 @@ const settingsDirty = ref(false)
 const statusMessage = ref('')
 const errorMessage = ref('')
 const isSaving = ref(false)
+const previewBrightness = ref(1)
 let statusTimer: ReturnType<typeof setInterval> | undefined
 
 const applySettings = (settings?: CameraSettings) => {
@@ -134,10 +135,24 @@ const receivedLabel = computed(() => {
 })
 const positionLabel = computed(() =>
   telemetryFresh.value && telemetry.value?.pos ? telemetry.value.pos : '--')
+const trackedStar = computed(() => {
+  const data = telemetry.value?.extras
+  if (!telemetryFresh.value || !data) return null
+  const x = Number(data.starX)
+  const y = Number(data.starY)
+  const width = Number(data.frameWidth)
+  const height = Number(data.frameHeight)
+  if (![x, y, width, height].every(Number.isFinite)
+    || width <= 0 || height <= 0 || x < 0 || y < 0 || x >= width || y >= height) return null
+  return { x, y, width, height, saturated: data.starSaturated === true }
+})
+const trackingLabel = computed(() => trackedStar.value
+  ? trackedStar.value.saturated ? 'Star saturated — reduce exposure or gain' : 'Tracking brightest star · coordinates and RMS in pixels'
+  : 'Searching for a star')
 const extras = computed(() => {
   const source = telemetry.value?.extras ?? {}
   return Object.entries(source)
-    .filter(([, value]) => value !== null && value !== undefined && value !== '')
+    .filter(([key, value]) => !['starX', 'starY', 'frameWidth', 'frameHeight'].includes(key) && value !== null && value !== undefined && value !== '')
     .map(([key, value]) => ({ key, value: typeof value === 'number' ? formatNumber(value, Number.isInteger(value) ? 0 : 2) : String(value) }))
 })
 
@@ -216,7 +231,7 @@ onBeforeUnmount(() => {
           Seeing Monitor
         </h1>
         <p class="mt-3 max-w-2xl text-base leading-7 text-slate-400">
-          Live H.264 video of Polaris from the seeing camera, with telemetry and capture controls.
+          Live view from the Polaris camera, with star tracking and capture controls.
         </p>
       </div>
 
@@ -269,13 +284,30 @@ onBeforeUnmount(() => {
         <div class="relative overflow-hidden rounded-lg border border-white/10 bg-black">
           <video
             ref="video"
-            class="min-h-[360px] max-h-[calc(100vh-15rem)] w-full object-contain"
+            class="block w-full object-contain"
+            :style="{ aspectRatio: `${status?.width || 1920} / ${status?.height || 1086}`, filter: `brightness(${previewBrightness})` }"
             muted
             autoplay
             playsinline
             preload="none"
             aria-label="Live seeing monitor video"
           />
+          <svg
+            v-if="trackedStar && playerState === 'playing'"
+            class="pointer-events-none absolute inset-0 h-full w-full"
+            :viewBox="`0 0 ${trackedStar.width} ${trackedStar.height}`"
+            aria-label="Tracked star position"
+          >
+            <circle
+              :cx="trackedStar.x"
+              :cy="trackedStar.y"
+              r="48"
+              fill="none"
+              :stroke="trackedStar.saturated ? '#fbbf24' : '#6ee7b7'"
+              stroke-width="1.5"
+              vector-effect="non-scaling-stroke"
+            />
+          </svg>
           <div
             v-if="overlayVisible"
             class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 px-6 text-center"
@@ -303,6 +335,13 @@ onBeforeUnmount(() => {
           </div>
           <div class="pointer-events-none absolute inset-3 rounded-lg border border-sky-200/15" />
         </div>
+
+        <p
+          class="mt-3 px-1 text-xs"
+          :class="trackedStar?.saturated ? 'text-amber-200' : 'text-emerald-200'"
+        >
+          {{ trackingLabel }}
+        </p>
 
         <div class="mt-3 grid grid-cols-2 gap-2 px-1 text-xs text-slate-400 sm:grid-cols-4">
           <div>
@@ -383,6 +422,18 @@ onBeforeUnmount(() => {
             class="grid gap-4"
             @submit.prevent="saveSettings"
           >
+            <label class="grid gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+              Preview brightness · {{ previewBrightness }}×
+              <input
+                v-model.number="previewBrightness"
+                type="range"
+                min="1"
+                max="4"
+                step="0.25"
+                class="w-full accent-sky-300"
+              >
+              <span class="font-normal normal-case tracking-normal text-slate-500">Display only; star measurements use the original camera pixels.</span>
+            </label>
             <UFormField
               label="Exposure (microseconds)"
               name="exposure"
@@ -440,6 +491,11 @@ onBeforeUnmount(() => {
             :description="errorMessage"
           />
         </UCard>
+
+        <p class="px-1 text-xs leading-5 text-slate-500">
+          The marker follows the brightest detected star. RMS describes image motion in camera pixels;
+          it includes pointing drift and is not calibrated atmospheric seeing in arcseconds.
+        </p>
 
         <UCard
           class="astro-panel"
