@@ -6,7 +6,8 @@ jar=/home/dorothy/CamServer-Backend/target/CamServer-springboot-1.0.0.jar
 test "$(id -u)" = 0
 test -f "$stage/rollback/prepared"
 test -f "$stage/backend.jar"
-test -f /etc/letsencrypt/live/armageddon.deepspace.ucsb.edu/fullchain.pem
+test -f /etc/ssl/allskycam/fullchain.pem
+test -f /etc/ssl/allskycam/privkey.pem
 cmp "$jar" "$stage/rollback/backend.jar"
 trap 'bash "$config/rollback.sh"' ERR
 install -m 644 "$stage/backend.jar" "${jar}.https-new"
@@ -27,7 +28,10 @@ for attempt in $(seq 1 30); do
     sleep 1
 done
 test "$ready" = 1
-curl -fsS --resolve armageddon.deepspace.ucsb.edu:443:127.0.0.1 --max-time 20 https://armageddon.deepspace.ucsb.edu/ -o "$stage/homepage.html"
+# The certificate may be the backend's existing self-signed certificate when
+# campus ingress prevents ACME validation. Network/application checks are separate
+# from public certificate trust in that case.
+curl -kfsS --resolve armageddon.deepspace.ucsb.edu:443:127.0.0.1 --max-time 20 https://armageddon.deepspace.ucsb.edu/ -o "$stage/homepage.html"
 grep -q '/_nuxt/' "$stage/homepage.html"
 test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/)" = 404
 install -D -m 755 "$config/renew-hook.sh" /etc/letsencrypt/renewal-hooks/deploy/reload-nginx

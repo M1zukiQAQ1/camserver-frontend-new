@@ -42,12 +42,22 @@ sudo bash prepare-http.sh
 sudo certbot certonly --webroot -w /var/www/letsencrypt \
   -d armageddon.deepspace.ucsb.edu --non-interactive --agree-tos \
   --register-unsafely-without-email
+sudo python3 install-certificate.py
 sudo bash activate-https.sh
 ```
 
 The activation checks backend connectivity, the HTTPS Nuxt homepage, and removal
 of the backend root page. It rolls back on failure. `certbot.timer` handles renewal;
-the deploy hook validates and reloads Nginx after a certificate is renewed.
+the deploy hook installs the renewed certificate, validates, and reloads Nginx.
+
+If ACME validation cannot reach the server through campus ingress, run
+`install-certificate.py` after the failed issuance attempt. It securely reuses
+the backend's existing self-signed certificate from the deployed JAR, permitting
+the HTTPS routing change without claiming public certificate trust. Obtain a
+trusted replacement once public ingress or a DNS challenge is available.
+Certificate/key files live in `/etc/ssl/allskycam`; the directory and key are
+root-only. HTTPS application checks accept the existing certificate, while
+public trust must be verified separately.
 
 To restore the original HTTP frontend and HTTPS backend services:
 
