@@ -26,7 +26,8 @@ sudo bash deploy/armageddon/activate-http.sh
 ```
 
 Then switch/restart the live sender and verify fresh video fragments over HTTP.
-The previous Nginx configuration is saved under `/home/dorothy/http-release-20260909`.
+The previous Nginx configuration is saved in a unique `/home/dorothy/http-release-*`
+directory, printed after activation. Readiness checks wait for Nginx's new workers.
 No application rebuild is needed for this routing-only change.
 
 ## Deploy from GitHub
