@@ -28,14 +28,12 @@ for attempt in $(seq 1 30); do
     sleep 1
 done
 test "$ready" = 1
-# The certificate may be the backend's existing self-signed certificate when
-# campus ingress prevents ACME validation. Network/application checks are separate
-# from public certificate trust in that case.
-curl -kfsS --resolve armageddon.deepspace.ucsb.edu:443:127.0.0.1 --max-time 20 https://armageddon.deepspace.ucsb.edu/ -o "$stage/homepage.html"
+# HTTP is canonical; the TLS listener exists only to redirect HTTPS clients.
+curl -fsS --max-time 20 http://127.0.0.1/ -o "$stage/homepage.html"
 grep -q '/_nuxt/' "$stage/homepage.html"
 test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/)" = 404
 install -D -m 755 "$config/renew-hook.sh" /etc/letsencrypt/renewal-hooks/deploy/reload-nginx
 systemctl enable --now certbot.timer
 touch "$stage/activation-complete"
 trap - ERR
-echo 'HTTPS frontend and camera APIs verified; HTTP redirects to HTTPS.'
+echo 'HTTP frontend and camera APIs verified; HTTPS redirects to HTTP.'
