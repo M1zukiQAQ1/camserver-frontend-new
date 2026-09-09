@@ -6,9 +6,15 @@ Nginx serves ports 80/443. HTTP serves the site and API routes. Every HTTPS
 request redirects to the same HTTP path/query with a non-cacheable 307, preserving
 the method and body for clients that follow redirects.
 Page requests go to Nuxt at 127.0.0.1:3000. `/api/**` and legacy camera API
-paths go to Spring at 127.0.0.1:8080. `/api/backend/` is stripped before proxying
-to Spring. Upload and response buffering are disabled to preserve the live
+paths go to Spring at 127.0.0.1:8080. The frontend uses `/api/query`, `/api/images/`,
+and the other `/api/` endpoints directly. `/api/settings` maps to Spring's legacy
+`/settings` endpoint; `/api/backend/` remains an alias for older links.
+Upload and response buffering are disabled to preserve the live
 camera producer, streaming video, and large downloads.
+
+`/api/_nuxt_icon/` must route to Nuxt at `127.0.0.1:3000`, ahead of the general
+`/api/` backend route. Nuxt UI requests icon JSON from this endpoint; sending it
+to Spring returns 404 and leaves controls such as Download without icons.
 
 The Spring backend no longer contains its old page controller, templates, or
 static UI assets. Legacy gallery and seeing-monitor URLs redirect to Nuxt.
@@ -36,6 +42,21 @@ Pull `main` in `/home/dorothy/CamServer-Backend` and `master` in
 `/home/dorothy/camserver-frontend-new`, using `git pull --ff-only`.
 Build the frontend with the server's `/home/dorothy/opt/node/bin` on PATH and
 `corepack pnpm install --frozen-lockfile && corepack pnpm build`.
+
+When upgrading from a frontend that uses `/api/backend`, deploy the new build
+with `NUXT_PUBLIC_API_BASE=/api` and the updated Nginx settings route together:
+
+```sh
+sudo install -m 644 deploy/armageddon/frontend.conf \
+  /etc/systemd/system/camserver-frontend.service.d/armageddon-release.conf
+sudo bash deploy/armageddon/activate-http.sh
+sudo systemctl daemon-reload
+sudo systemctl restart camserver-frontend.service
+```
+
+The backend does not need a rebuild or restart for this URL cleanup. Existing
+`/api/backend/api/...` links remain supported, while the new frontend generates
+only `/api/...` URLs.
 
 The initial HTTPS cutover uses `/home/dorothy/https-release-20260909` as its
 staging and rollback directory. The old backend artifact has independently

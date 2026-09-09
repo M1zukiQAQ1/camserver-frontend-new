@@ -11,7 +11,7 @@ const props = defineProps<{
 
 const apiBase = useApiBase()
 
-const filePath = computed(() => `${apiBase}/api/images/${getImageFileName(props.image.imgPath)}.jpg`)
+const filePath = computed(() => `${apiBase}/images/${getImageFileName(props.image.imgPath)}.jpg`)
 const capturedAt = computed(() => formatDateTime(props.image.timestamp, props.image.timeZone))
 const period = computed(() => getImagePeriod(props.image.timestamp, props.image.timeZone))
 

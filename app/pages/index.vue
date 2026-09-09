@@ -13,13 +13,13 @@ const featuredQuery: ImageQuery = {
   featured: true
 }
 
-const { data: featData, status, error } = await useFetch<CameraImage[]>(`${apiBase}/api/query`, {
+const { data: featData, status, error } = await useFetch<CameraImage[]>(`${apiBase}/query`, {
   query: featuredQuery
 })
 
 // Secondary data for the hero stat tiles; the page renders fine without it.
-const { data: sites } = useLazyFetch<Camera[]>(`${apiBase}/api/sites`)
-const { data: latestFrames } = useLazyFetch<CameraImage[]>(`${apiBase}/api/query`, {
+const { data: sites } = useLazyFetch<Camera[]>(`${apiBase}/sites`)
+const { data: latestFrames } = useLazyFetch<CameraImage[]>(`${apiBase}/query`, {
   query: { pagesize: 1 }
 })
 
@@ -41,7 +41,7 @@ const latestCaptureLabel = computed(() => {
   return latest ? formatDate(latest.timestamp, latest.timeZone) : null
 })
 
-const imageUrlFor = (image: CameraImage) => `${apiBase}/api/images/${getImageFileName(image.imgPath)}.jpg`
+const imageUrlFor = (image: CameraImage) => `${apiBase}/images/${getImageFileName(image.imgPath)}.jpg`
 </script>
 
 <template>

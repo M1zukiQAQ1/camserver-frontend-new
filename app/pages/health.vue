@@ -20,7 +20,7 @@ let clockTimer: ReturnType<typeof setInterval> | undefined
 const load = async (refresh = false) => {
   loading.value = true
   try {
-    report.value = await $fetch<HealthReport>(`${apiBase}/api/health`, {
+    report.value = await $fetch<HealthReport>(`${apiBase}/health`, {
       query: refresh ? { refresh: 'true' } : undefined
     })
     errorMessage.value = ''
@@ -156,7 +156,7 @@ const formatExposure = (microseconds: number | null | undefined) => {
 
 // Capture scripts store the all-sky exposure in microseconds, as the gallery assumes.
 const thumbnailFor = (camera: CameraHealth) =>
-  camera.latestFrame?.fileName ? `${apiBase}/api/images/${camera.latestFrame.fileName}.jpg` : null
+  camera.latestFrame?.fileName ? `${apiBase}/images/${camera.latestFrame.fileName}.jpg` : null
 
 const hostSummary = (probe: HostProbe | null | undefined) => {
   if (!probe) return 'No host configured'

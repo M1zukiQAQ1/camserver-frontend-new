@@ -127,16 +127,16 @@ const {
   data: image,
   pending,
   error
-} = await useFetch<CameraImage>(() => `${apiBase}/api/query/${imgId.value}`, {
+} = await useFetch<CameraImage>(() => `${apiBase}/query/${imgId.value}`, {
   key: `gallery-image-${imgId.value}`
 })
 
 const imageFileName = computed(() => image.value ? getImageFileName(image.value.imgPath) ?? '' : '')
 
-const imageUrl = computed(() => imageFileName.value ? `${apiBase}/api/images/${imageFileName.value}.jpg` : '')
+const imageUrl = computed(() => imageFileName.value ? `${apiBase}/images/${imageFileName.value}.jpg` : '')
 
 const { data: fitsInfo } = useLazyFetch<ArchiveFileInfo>(
-  () => `${apiBase}/api/archive/files/${imageFileName.value}.fits`,
+  () => `${apiBase}/archive/files/${imageFileName.value}.fits`,
   {
     key: `gallery-fits-${imgId.value}`,
     immediate: Boolean(imageFileName.value),
@@ -150,7 +150,7 @@ const hasFits = computed(() => Boolean(fitsInfo.value?.exists && fitsInfo.value.
 // anything else is offered gzip-compressed, which the backend produces on the fly if needed.
 const fitsIsRice = computed(() => fitsInfo.value?.format === 'rice')
 const fitsDownloadUrl = computed(() => imageFileName.value
-  ? `${apiBase}/api/images/${imageFileName.value}.fits${fitsIsRice.value ? '.fz' : '.gz'}`
+  ? `${apiBase}/images/${imageFileName.value}.fits${fitsIsRice.value ? '.fz' : '.gz'}`
   : '')
 const fitsFormatLabel = computed(() => fitsIsRice.value ? ' · Rice' : fitsInfo.value?.gzipped ? ' · gzip' : '')
 
@@ -463,7 +463,7 @@ const startPlateSolve = async () => {
   hasAutoZoomedPlateSolve.value = false
 
   try {
-    plateSolve.value = await $fetch<PlateSolveResult>(`${apiBase}/api/plate-solve/${imgId.value}`, {
+    plateSolve.value = await $fetch<PlateSolveResult>(`${apiBase}/plate-solve/${imgId.value}`, {
       method: 'POST'
     })
 
@@ -521,7 +521,7 @@ const closeSelectedStar = () => {
 
 const refreshPlateSolveStatus = async () => {
   try {
-    plateSolve.value = await $fetch<PlateSolveResult>(`${apiBase}/api/plate-solve/${imgId.value}`)
+    plateSolve.value = await $fetch<PlateSolveResult>(`${apiBase}/plate-solve/${imgId.value}`)
 
     if (isTerminalPlateSolveStatus(plateSolve.value.status)) {
       plateSolvePending.value = false

@@ -92,13 +92,13 @@ const {
   data: cameras,
   status: camerasStatus,
   error: camerasError
-} = await useFetch<Camera[]>(`${apiBase}/api/sites`)
+} = await useFetch<Camera[]>(`${apiBase}/sites`)
 
 const {
   data: firstPage,
   status: imagesStatus,
   error: imagesError
-} = await useFetch<CameraImage[]>(`${apiBase}/api/query`, {
+} = await useFetch<CameraImage[]>(`${apiBase}/query`, {
   query: imageQuery
 })
 
@@ -189,7 +189,7 @@ const loadMore = async () => {
   loadMoreError.value = ''
 
   try {
-    const page = await $fetch<CameraImage[]>(`${apiBase}/api/query`, {
+    const page = await $fetch<CameraImage[]>(`${apiBase}/query`, {
       query: { ...queryAtStart, lastUID: last.imgId }
     })
 

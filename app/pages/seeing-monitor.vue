@@ -7,8 +7,8 @@ useHead({
 
 const apiBase = useApiBase()
 
-const streamUrl = `${apiBase}/api/live/stream.mp4`
-const polarisDataUrl = `${apiBase}/api/images/PolarisData.csv`
+const streamUrl = `${apiBase}/live/stream.mp4`
+const polarisDataUrl = `${apiBase}/images/PolarisData.csv`
 
 const {
   video,
@@ -42,7 +42,7 @@ const applySettings = (settings?: CameraSettings) => {
 
 const pollStatus = async () => {
   try {
-    const next = await $fetch<LiveStatus>(`${apiBase}/api/live/status`)
+    const next = await $fetch<LiveStatus>(`${apiBase}/live/status`)
     status.value = next
     statusError.value = false
     applySettings(next.settings)
