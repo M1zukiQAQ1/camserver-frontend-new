@@ -7,34 +7,27 @@ useHead({
 })
 
 const apiBase = useApiBase()
-const REFRESH_MS = 30000
+// The backend checks every feed in the background; polling only reads its newest result.
+const POLL_MS = 15000
 
 const report = ref<HealthReport | null>(null)
-const loading = ref(false)
 const errorMessage = ref('')
-const fetchedAt = ref<number | null>(null)
 const now = ref(Date.now())
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let clockTimer: ReturnType<typeof setInterval> | undefined
 
-const load = async (refresh = false) => {
-  loading.value = true
+const load = async () => {
   try {
-    report.value = await $fetch<HealthReport>(`${apiBase}/health`, {
-      query: refresh ? { refresh: 'true' } : undefined
-    })
+    report.value = await $fetch<HealthReport>(`${apiBase}/health`)
     errorMessage.value = ''
-    fetchedAt.value = Date.now()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to load the health report.'
-  } finally {
-    loading.value = false
   }
 }
 
 onMounted(() => {
   load()
-  pollTimer = setInterval(() => load(), REFRESH_MS)
+  pollTimer = setInterval(() => load(), POLL_MS)
   clockTimer = setInterval(() => {
     now.value = Date.now()
   }, 1000)
@@ -113,8 +106,11 @@ const summaryTiles = computed(() => {
   }))
 })
 
-const secondsSinceFetch = computed(() => fetchedAt.value ? Math.max(0, Math.round((now.value - fetchedAt.value) / 1000)) : null)
-const nextRefreshIn = computed(() => secondsSinceFetch.value === null ? null : Math.max(0, Math.round(REFRESH_MS / 1000) - secondsSinceFetch.value))
+const secondsSinceCheck = computed(() => {
+  const generated = report.value ? Date.parse(report.value.generatedAt) : Number.NaN
+  return Number.isFinite(generated) ? Math.max(0, Math.round((now.value - generated) / 1000)) : null
+})
+const checkInterval = computed(() => report.value?.refreshSeconds ?? report.value?.cacheSeconds ?? null)
 
 const formatAge = (seconds: number | null | undefined) => {
   if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return '--'
@@ -242,20 +238,11 @@ const localTime = (value: string | null | undefined) => {
 
       <div class="flex flex-wrap items-center gap-3">
         <span
-          v-if="secondsSinceFetch !== null"
+          v-if="secondsSinceCheck !== null"
           class="text-xs font-semibold text-slate-500"
         >
-          Checked {{ formatAge(secondsSinceFetch) }} ago · refreshes in {{ nextRefreshIn }} s
+          Checked {{ formatAge(secondsSinceCheck) }} ago<template v-if="checkInterval"> · the server checks every {{ checkInterval }} s</template>
         </span>
-        <UButton
-          :loading="loading"
-          icon="i-lucide-refresh-cw"
-          color="neutral"
-          variant="subtle"
-          @click="load(true)"
-        >
-          Re-check now
-        </UButton>
       </div>
     </div>
 
@@ -267,6 +254,16 @@ const localTime = (value: string | null | undefined) => {
       icon="i-lucide-triangle-alert"
       title="The health report could not be loaded"
       :description="errorMessage"
+    />
+
+    <UAlert
+      v-else-if="report?.stale"
+      class="mb-6"
+      color="warning"
+      variant="subtle"
+      icon="i-lucide-clock-alert"
+      title="These results are out of date"
+      :description="`The server's background health check has not finished since ${localTime(report.generatedAt)}; the cards below show that last result.`"
     />
 
     <section
@@ -812,7 +809,7 @@ const localTime = (value: string | null | undefined) => {
 
           <div class="mt-auto flex items-center justify-between border-t border-white/10 pt-3 text-xs">
             <span class="font-semibold uppercase tracking-wider text-slate-500">Backend</span>
-            <span class="text-slate-500">Report cached {{ report.cacheSeconds }} s</span>
+            <span class="text-slate-500">Checked every {{ checkInterval }} s</span>
           </div>
         </div>
       </article>

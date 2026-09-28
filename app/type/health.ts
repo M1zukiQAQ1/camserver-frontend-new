@@ -81,7 +81,12 @@ export interface ServerHealth {
 
 export interface HealthReport {
   generatedAt: string
+  /** Same as refreshSeconds; kept for backends from before the background checks. */
   cacheSeconds: number
+  /** Seconds between the backend's background checks. */
+  refreshSeconds?: number
+  /** True when the background checks have not produced a report for three intervals. */
+  stale?: boolean
   status: HealthStatus
   summary: Record<string, number>
   cameras: CameraHealth[]
