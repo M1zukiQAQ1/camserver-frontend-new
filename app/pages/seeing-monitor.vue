@@ -25,11 +25,15 @@ const status = ref<LiveStatus | null>(null)
 const statusError = ref(false)
 const exposure = ref<number | undefined>()
 const gain = ref<number | undefined>()
+const autoExposure = ref(false)
 const settingsDirty = ref(false)
 const statusMessage = ref('')
 const errorMessage = ref('')
 const isSaving = ref(false)
 const previewBrightness = ref(1)
+const statusReceivedAt = ref(0)
+const clockNow = ref(Date.now())
+let statusPending = false
 let statusTimer: ReturnType<typeof setInterval> | undefined
 
 const applySettings = (settings?: CameraSettings) => {
@@ -38,24 +42,34 @@ const applySettings = (settings?: CameraSettings) => {
   }
   exposure.value = settings.exposure
   gain.value = settings.gain
+  autoExposure.value = settings.autoExposure === true
 }
 
 const pollStatus = async () => {
+  clockNow.value = Date.now()
+  if (statusPending) return
+  statusPending = true
   try {
-    const next = await $fetch<LiveStatus>(`${apiBase}/live/status`)
+    const next = await $fetch<LiveStatus>(`${apiBase}/live/status`, { timeout: 5000, retry: 0 })
     status.value = next
+    statusReceivedAt.value = Date.now()
     statusError.value = false
     applySettings(next.settings)
   } catch {
     statusError.value = true
+  } finally {
+    statusPending = false
   }
 }
 
 const isLive = computed(() => status.value?.live === true)
 const telemetry = computed(() => status.value?.telemetry)
+const reportAgeSeconds = computed(() => (telemetry.value?.ageSeconds ?? Infinity)
+  + Math.max(0, clockNow.value - statusReceivedAt.value) / 1000)
 const telemetryFresh = computed(() => {
   const age = telemetry.value?.ageSeconds
-  return typeof age === 'number' && age < 15
+  return !statusError.value && typeof age === 'number' && age >= 0
+    && reportAgeSeconds.value < 15
 })
 
 const badge = computed(() => {
@@ -110,7 +124,10 @@ const formatNumber = (value: number | null | undefined, digits = 0) =>
 
 const latencyLabel = computed(() =>
   telemetryFresh.value ? formatNumber(telemetry.value?.latencyMs) : '--')
-const exposureLabel = computed(() => exposure.value ?? '--')
+const exposureLabel = computed(() => {
+  const reported = telemetry.value?.extras?.exposureUs
+  return telemetryFresh.value && typeof reported === 'number' ? formatNumber(reported) : '--'
+})
 const gainLabel = computed(() => gain.value ?? '--')
 const resolutionLabel = computed(() =>
   isLive.value && status.value?.width && status.value?.height
@@ -146,13 +163,22 @@ const trackedStar = computed(() => {
     || width <= 0 || height <= 0 || x < 0 || y < 0 || x >= width || y >= height) return null
   return { x, y, width, height, saturated: data.starSaturated === true }
 })
-const trackingLabel = computed(() => trackedStar.value
-  ? trackedStar.value.saturated ? 'Star saturated — reduce exposure or gain' : 'Tracking brightest star · coordinates and RMS in pixels'
-  : 'Searching for a star')
+const overexposed = computed(() => telemetryFresh.value && telemetry.value?.extras?.frameOverexposed === true)
+const trackingLabel = computed(() => overexposed.value
+  ? telemetry.value?.extras?.autoExposure === true
+    ? 'Image overexposed · automatic exposure is adjusting; reduce gain if it persists'
+    : 'Image overexposed · reduce exposure or enable automatic exposure'
+  : trackedStar.value
+    ? trackedStar.value.saturated
+      ? 'Star saturated — reduce exposure or gain'
+      : telemetry.value?.extras?.seeing?.target === 'polaris_roi'
+        ? 'Tracking selected Polaris region · coordinates and raw RMS in pixels'
+        : 'Tracking brightest star · coordinates and raw RMS in pixels'
+    : 'Searching for a star')
 const extras = computed(() => {
   const source = telemetry.value?.extras ?? {}
   return Object.entries(source)
-    .filter(([key, value]) => !['starX', 'starY', 'frameWidth', 'frameHeight'].includes(key) && value !== null && value !== undefined && value !== '')
+    .filter(([key, value]) => !['starX', 'starY', 'frameWidth', 'frameHeight', 'seeing'].includes(key) && value !== null && value !== undefined && value !== '')
     .map(([key, value]) => ({ key, value: typeof value === 'number' ? formatNumber(value, Number.isInteger(value) ? 0 : 2) : String(value) }))
 })
 
@@ -188,6 +214,7 @@ const saveSettings = async () => {
     const formData = new FormData()
     formData.append('exposure', String(nextExposure))
     formData.append('gain', String(nextGain))
+    formData.append('autoExposure', String(autoExposure.value))
 
     const response = await $fetch<{ ok?: boolean, settings?: CameraSettings }>(`${apiBase}/settings`, {
       method: 'POST',
@@ -198,6 +225,7 @@ const saveSettings = async () => {
     if (response.settings) {
       exposure.value = response.settings.exposure
       gain.value = response.settings.gain
+      autoExposure.value = response.settings.autoExposure === true
     }
 
     statusMessage.value = response.ok === false ? 'Settings were not saved.' : 'Settings saved. The camera picks them up on its next report.'
@@ -250,7 +278,7 @@ onBeforeUnmount(() => {
           target="_blank"
           icon="i-lucide-download"
         >
-          Polaris CSV
+          Legacy Polaris CSV
         </UButton>
       </div>
     </div>
@@ -338,7 +366,7 @@ onBeforeUnmount(() => {
 
         <p
           class="mt-3 px-1 text-xs"
-          :class="trackedStar?.saturated ? 'text-amber-200' : 'text-emerald-200'"
+          :class="overexposed || trackedStar?.saturated ? 'text-amber-200' : 'text-emerald-200'"
         >
           {{ trackingLabel }}
         </p>
@@ -369,6 +397,11 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
+        <SeeingConditions
+          :report-age-seconds="reportAgeSeconds"
+          :measurement="telemetry?.extras?.seeing"
+          :fresh="telemetryFresh"
+        />
       </main>
 
       <aside class="grid gap-4">
@@ -386,7 +419,7 @@ onBeforeUnmount(() => {
               {{ exposureLabel }}
             </div>
             <div class="mt-1 text-[0.68rem] font-bold uppercase tracking-wider text-slate-500">
-              exposure
+              actual exposure · µs
             </div>
           </div>
           <div class="astro-panel-strong p-4 text-center">
@@ -422,6 +455,22 @@ onBeforeUnmount(() => {
             class="grid gap-4"
             @submit.prevent="saveSettings"
           >
+            <label class="flex items-start gap-3 text-sm text-slate-200">
+              <input
+                v-model="autoExposure"
+                type="checkbox"
+                :disabled="status?.settings?.autoExposure === undefined"
+                class="mt-1 size-4 accent-sky-300"
+                @change="markDirty"
+              >
+              <span>
+                <span class="font-bold">Automatic exposure</span>
+                <span class="mt-1 block text-xs leading-5 text-slate-400">
+                  Shortens exposure in bright skies and restores your selected maximum after dark.
+                  Turn off for manual exposure. Apply settings to save the mode.
+                </span>
+              </span>
+            </label>
             <label class="grid gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
               Preview brightness · {{ previewBrightness }}×
               <input
@@ -435,7 +484,7 @@ onBeforeUnmount(() => {
               <span class="font-normal normal-case tracking-normal text-slate-500">Display only; star measurements use the original camera pixels.</span>
             </label>
             <UFormField
-              label="Exposure (microseconds)"
+              :label="autoExposure ? 'Maximum exposure (microseconds)' : 'Exposure (microseconds)'"
               name="exposure"
               :ui="{ label: 'text-xs font-bold uppercase tracking-wider text-slate-400' }"
             >
@@ -493,8 +542,8 @@ onBeforeUnmount(() => {
         </UCard>
 
         <p class="px-1 text-xs leading-5 text-slate-500">
-          The marker follows the brightest detected star. RMS describes image motion in camera pixels;
-          it includes pointing drift and is not calibrated atmospheric seeing in arcseconds.
+          The position readout reports raw motion in camera pixels, including drift.
+          Atmospheric monitoring below the video removes linear drift and checks measurement quality.
         </p>
 
         <UCard
