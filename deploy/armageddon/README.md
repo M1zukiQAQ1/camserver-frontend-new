@@ -1,5 +1,27 @@
 # Armageddon web deployment
 
+## Trusted HTTPS routing — 2026-09-10
+
+The active public URL is `https://armageddon.deepspace.ucsb.edu/`.
+`nginx-https.conf` serves the current frontend and API routes on HTTPS and
+redirects HTTP to HTTPS with status 308, preserving methods, paths and queries.
+The HTTP ACME challenge path remains available for certificate renewal.
+
+`activate-trusted-https.sh` installs this routing, validates Nginx and the live
+routes, and rolls back on failed checks. It requires the trusted certificate
+already installed under `/etc/ssl/allskycam`; it does not rebuild the apps or
+replace the existing frontend/backend releases. Run it with sudo from this
+directory after copying both files to the server.
+
+The live seeing-camera sender must also use
+`CAMSERVER_BACKEND=https://armageddon.deepspace.ucsb.edu` and
+`CAMSERVER_TLS_INSECURE=0`, followed by a producer restart. It does not follow
+redirects. The coordinated activation script and validation record are in the
+workspace's `deployment/armageddon-https-20260910` directory. The all-sky image
+uploader already targets the HTTPS endpoint.
+
+## Previous HTTP routing
+
 Public site: http://armageddon.deepspace.ucsb.edu/
 
 Nginx serves ports 80/443. HTTP serves the site and API routes. Every HTTPS
