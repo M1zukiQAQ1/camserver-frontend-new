@@ -2,6 +2,7 @@
 import type { Camera } from '~/type/camera'
 import type { CameraImage } from '~/type/cameraImage'
 import type { ImageQuery } from '~/type/imageQuery'
+import type { Night } from '~/type/sky'
 import { formatDate } from '~/utils/formatDateTime'
 import { getImageFileName } from '~/utils/getImageFileName'
 import { getImagePeriod } from '~/utils/getImagePeriod'
@@ -21,6 +22,33 @@ const { data: featData, status, error } = await useFetch<CameraImage[]>(`${apiBa
 const { data: sites } = useLazyFetch<Camera[]>(`${apiBase}/sites`)
 const { data: latestFrames } = useLazyFetch<CameraImage[]>(`${apiBase}/query`, {
   query: { pagesize: 1 }
+})
+
+// The newest night that has a time-lapse; the section is left out when there is none.
+const { data: nights } = useLazyFetch<Night[]>(`${apiBase}/nightly`, {
+  query: { limit: 30 },
+  server: false
+})
+const timelapseFailed = ref(false)
+const timelapseNight = computed(() =>
+  timelapseFailed.value ? null : (nights.value ?? []).find(night => night.timelapse) ?? null
+)
+const timelapseUrl = computed(() => {
+  const night = timelapseNight.value
+  return night
+    ? `${apiBase}/nightly/${encodeURIComponent(night.cameraId)}/${night.date}/${night.timelapse}?v=${encodeURIComponent(night.builtAt)}`
+    : ''
+})
+const timelapseDate = computed(() => {
+  const night = timelapseNight.value
+  return night
+    ? new Intl.DateTimeFormat('en-US', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })
+        .format(new Date(`${night.date}T12:00:00Z`))
+    : ''
+})
+const timelapseHours = computed(() => {
+  const night = timelapseNight.value
+  return night ? Math.round((Date.parse(night.end) - Date.parse(night.start)) / 3_600_000) : 0
 })
 
 const featuredImages = computed(() => featData.value ?? [])
@@ -126,6 +154,50 @@ const imageUrlFor = (image: CameraImage) => `${apiBase}/images/${getImageFileNam
         </div>
       </UContainer>
     </section>
+
+    <UContainer
+      v-if="timelapseNight"
+      id="timelapse"
+      class="scroll-mt-16 pt-14"
+    >
+      <div class="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+        <div>
+          <p class="astro-eyebrow">
+            A night in motion
+          </p>
+          <h2 class="mt-2 text-3xl font-black tracking-normal text-white">
+            {{ timelapseDate }}
+          </h2>
+          <p class="mt-2 text-sm text-slate-400">
+            {{ timelapseNight.siteName || timelapseNight.cameraId }} · {{ timelapseNight.frames.length }} frames,
+            {{ timelapseHours }} hours from dusk to dawn
+          </p>
+        </div>
+        <UButton
+          trailing-icon="i-lucide-arrow-right"
+          color="neutral"
+          variant="subtle"
+          to="/nights"
+        >
+          All nights
+        </UButton>
+      </div>
+      <div class="astro-panel p-3">
+        <video
+          :key="timelapseUrl"
+          :src="timelapseUrl"
+          :aria-label="`Time-lapse of the night of ${timelapseDate}`"
+          class="block max-h-[70vh] w-full rounded-lg bg-black"
+          controls
+          autoplay
+          loop
+          muted
+          playsinline
+          preload="metadata"
+          @error="timelapseFailed = true"
+        />
+      </div>
+    </UContainer>
 
     <UContainer class="py-14">
       <div class="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
