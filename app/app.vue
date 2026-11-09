@@ -32,6 +32,11 @@ const menuItems = computed<NavigationMenuItem[]>(() => [
     to: '/gallery'
   },
   {
+    label: 'Nights',
+    icon: 'i-lucide-moon-star',
+    to: '/nights'
+  },
+  {
     label: 'Seeing Monitor',
     icon: 'i-lucide-radio-tower',
     to: '/seeing-monitor'

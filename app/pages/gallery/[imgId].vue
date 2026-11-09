@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CameraImage } from '~/type/cameraImage'
 import type { PlateSolveCrop, PlateSolveResult, PlateSolveStar } from '~/type/plateSolve'
+import type { SkyView, StreakView } from '~/type/sky'
 import { formatDateTime } from '~/utils/formatDateTime'
 import { getImageFileName } from '~/utils/getImageFileName'
 import { getImagePeriod } from '~/utils/getImagePeriod'
@@ -26,6 +27,9 @@ const overlayVisible = ref(true)
 const showUnconfirmedCandidates = ref(false)
 const selectedStar = ref<PlateSolveStar | null>(null)
 const isPlateSolveFullscreen = ref(false)
+const sky = ref<SkyView | null>(null)
+const streakView = ref<StreakView | null>(null)
+const skyOverlayVisible = ref(true)
 const hasAutoZoomedPlateSolve = ref(false)
 let plateSolvePollTimer: ReturnType<typeof setInterval> | undefined
 
@@ -322,8 +326,87 @@ const zodiacLineSegments = computed<ZodiacLineSegment[]>(() => {
   return segments
 })
 
+// Constellations, planets and sky quality are derived from the plate solution (GET /api/sky/{imgId});
+// trails need only the picture, so they are there for unsolved frames too.
+const skyOverlayData = computed(() => {
+  const overlay = sky.value?.status === 'OK' ? sky.value.overlay : null
+  if (!overlay || !shouldShowPlateSolveOverlay.value) {
+    return overlay
+  }
+  // The star markers carry their own labels; do not write a second name on top of them.
+  const labelled = visiblePlateSolveStars.value.filter(star => starLabel(star))
+  const near = Math.max(plateSolve.value?.crop?.originalWidth ?? 0, 1000) / 60
+  return {
+    ...overlay,
+    stars: overlay.stars.filter(name => !labelled.some(star => Math.hypot(star.x - name.x, star.y - name.y) < near))
+  }
+})
+const skyQuality = computed(() => sky.value?.status === 'OK' ? sky.value.quality : null)
+const streaks = computed(() => streakView.value?.streaks ?? [])
+
+const skyOverlaySize = computed(() => {
+  const crop = plateSolve.value?.crop
+  if (crop) {
+    return { width: crop.originalWidth, height: crop.originalHeight }
+  }
+  return streakView.value?.width ? { width: streakView.value.width, height: streakView.value.height } : null
+})
+
+const hasSkyOverlay = computed(() =>
+  Boolean(skyOverlaySize.value && (skyOverlayData.value || streaks.value.length))
+)
+
+const shouldShowSkyOverlay = computed(() => skyOverlayVisible.value && hasSkyOverlay.value)
+
+const clearSkyLabel = computed(() => {
+  const fraction = skyQuality.value?.clearFraction
+  return fraction == null ? '' : `${Math.round(fraction * 100)}%`
+})
+
+const skyQualityDetail = computed(() => {
+  const quality = skyQuality.value
+  if (!quality) {
+    return ''
+  }
+  const stars = `${quality.detected} of ${quality.expected} stars to magnitude ${quality.magnitudeLimit} within ${quality.maxAngleDeg}° of the image centre were detected.`
+  return quality.clearFraction == null ? `Too few bright stars in view to judge (${quality.expected}).` : stars
+})
+
+const bodiesInView = computed(() => skyOverlayData.value?.bodies.map(body => body.name).join(', ') ?? '')
+
+const streakSummary = computed(() => {
+  if (!streakView.value) {
+    return ''
+  }
+  if (streakView.value.status !== 'OK') {
+    return streakView.value.message ?? ''
+  }
+  const count = streaks.value.length
+  return count === 0
+    ? 'No trails found in this frame.'
+    : `${count} trail${count === 1 ? '' : 's'} found (meteor, satellite or aircraft), marked in pink.`
+})
+
+const loadSky = async () => {
+  try {
+    sky.value = await $fetch<SkyView>(`${apiBase}/sky/${imgId.value}`)
+  } catch {
+    sky.value = null
+  }
+}
+
+const loadStreaks = async () => {
+  try {
+    streakView.value = await $fetch<StreakView>(`${apiBase}/sky/${imgId.value}/streaks`)
+  } catch {
+    streakView.value = null
+  }
+}
+
+// The full constellation figures replace the zodiac-only lines drawn between identified stars.
 const shouldShowZodiacLines = computed(() =>
   shouldShowPlateSolveOverlay.value && zodiacLineSegments.value.length > 0
+  && !(skyOverlayVisible.value && skyOverlayData.value)
 )
 
 const overlayToggleLabel = computed(() =>
@@ -723,12 +806,16 @@ const autoZoomPlateSolve = () => {
 
 onMounted(() => {
   refreshPlateSolveStatus()
+  loadStreaks()
   window.addEventListener('keydown', handleKeydown)
 })
 
-watch(plateSolve, (next) => {
+watch(plateSolve, (next, previous) => {
   if (next?.status === 'SOLVED') {
     autoZoomPlateSolve()
+    if (!sky.value || next.generatedAt !== previous?.generatedAt) {
+      loadSky()
+    }
   }
 
   if (!selectedStar.value) {
@@ -742,6 +829,9 @@ watch(imgId, () => {
   isPlateSolveFullscreen.value = false
   hasAutoZoomedPlateSolve.value = false
   selectedStar.value = null
+  sky.value = null
+  streakView.value = null
+  loadStreaks()
 })
 
 onBeforeUnmount(() => {
@@ -931,6 +1021,14 @@ onBeforeUnmount(() => {
                   </span>
                 </div>
               </div>
+
+              <SkyOverlay
+                v-if="shouldShowSkyOverlay && skyOverlaySize && !imageFailed"
+                :width="skyOverlaySize.width"
+                :height="skyOverlaySize.height"
+                :overlay="skyOverlayData"
+                :streaks="streaks"
+              />
 
               <div
                 v-if="shouldShowPlateSolveOverlay"
@@ -1185,6 +1283,66 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
+          <div class="astro-panel p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-start gap-2">
+                <UIcon
+                  name="i-lucide-sparkles"
+                  class="mt-0.5 size-4 text-sky-200"
+                />
+                <h2 class="text-sm font-extrabold text-white">
+                  Sky
+                </h2>
+              </div>
+              <UButton
+                size="xs"
+                :disabled="!hasSkyOverlay"
+                :icon="skyOverlayVisible ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                color="neutral"
+                variant="subtle"
+                @click="skyOverlayVisible = !skyOverlayVisible"
+              >
+                {{ skyOverlayVisible ? 'Hide lines' : 'Show lines' }}
+              </UButton>
+            </div>
+
+            <template v-if="skyQuality">
+              <p
+                v-if="clearSkyLabel"
+                class="mt-3 text-3xl font-black tabular-nums text-white"
+              >
+                {{ clearSkyLabel }}
+                <span class="text-sm font-bold text-slate-400">clear</span>
+              </p>
+              <p class="mt-1 text-xs leading-5 text-slate-400">
+                {{ skyQualityDetail }}
+                <template v-if="skyQuality.limitingMagnitude != null">
+                  Faintest stars detected: about magnitude {{ skyQuality.limitingMagnitude }}.
+                </template>
+              </p>
+              <p
+                v-if="bodiesInView"
+                class="mt-2 text-xs leading-5 text-amber-200"
+              >
+                In view: {{ bodiesInView }}
+              </p>
+            </template>
+            <p
+              v-else
+              class="mt-3 text-xs leading-5 text-slate-400"
+            >
+              {{ sky?.status === 'FIT_FAILED'
+                ? 'The identified stars do not agree with each other, so no constellations are drawn for this solution.'
+                : 'Plate-solve this frame to measure how clear the sky was and to draw constellations and planets.' }}
+            </p>
+            <p
+              v-if="streakSummary"
+              class="mt-2 border-t border-white/10 pt-2 text-xs leading-5 text-slate-400"
+            >
+              {{ streakSummary }}
+            </p>
+          </div>
+
           <UAlert
             v-if="plateSolveError"
             class="astro-panel p-2"
@@ -1276,6 +1434,14 @@ onBeforeUnmount(() => {
               :alt="`${image.siteName} all sky capture ${capturedAt}`"
               class="solve-fullscreen-image"
             >
+
+            <SkyOverlay
+              v-if="shouldShowSkyOverlay && skyOverlaySize"
+              :width="skyOverlaySize.width"
+              :height="skyOverlaySize.height"
+              :overlay="skyOverlayData"
+              :streaks="streaks"
+            />
 
             <div
               v-if="shouldShowPlateSolveOverlay"
