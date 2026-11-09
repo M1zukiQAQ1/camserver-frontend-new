@@ -36,6 +36,12 @@ export default defineNuxtConfig({
     }
   },
 
+  // The admin panel talks to /api/admin with the browser's session cookie, so render it in the
+  // browser only; nginx and the backend restrict it to the UCSB VPN.
+  routeRules: {
+    '/admin': { ssr: false, headers: { 'x-robots-tag': 'noindex, nofollow', 'cache-control': 'no-store' } }
+  },
+
   compatibilityDate: '2025-01-15',
 
   eslint: {

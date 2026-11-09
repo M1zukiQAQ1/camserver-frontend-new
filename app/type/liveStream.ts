@@ -71,6 +71,14 @@ export type CameraSettings = {
   autoExposure?: boolean
 }
 
+/** How the live video is rendered from the measurement frames (seeing-monitor page). */
+export type PictureSettings = {
+  /** Display stretch, 1 = linear … 6 */
+  gain?: number
+  /** Frames averaged into the picture, 1 = off … 8 */
+  frames?: number
+}
+
 export type LiveStatus = {
   live: boolean
   state: LiveStreamState
@@ -97,4 +105,5 @@ export type LiveStatus = {
   lastSessionEndReason?: string
   telemetry?: LiveTelemetry
   settings?: CameraSettings
+  preview?: PictureSettings
 }

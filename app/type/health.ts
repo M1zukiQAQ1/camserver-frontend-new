@@ -58,10 +58,24 @@ export interface SeeingHealth {
   telemetryAgeSeconds?: number | null
   position?: string | null
   telemetry?: Record<string, unknown>
-  settings?: { exposure?: number, gain?: number }
+  settings?: { exposure?: number, gain?: number, autoExposure?: boolean }
   lastSessionEndedAt?: string | null
   lastSessionEndReason?: string | null
   host?: HostProbe | null
+  lastNight?: SeeingNight | null
+}
+
+/** The last completed night (Sun below -12 degrees at the site) in the seeing history. */
+export interface SeeingNight {
+  start: string
+  end: string
+  label: string
+  records: number
+  validRecords: number
+  statuses: Record<string, number>
+  exposuresUs: Record<string, number>
+  gains: Record<string, number>
+  checkedAt: string
 }
 
 export interface ServerHealth {

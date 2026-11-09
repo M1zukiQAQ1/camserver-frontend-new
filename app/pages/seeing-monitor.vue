@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CameraSettings, LiveStatus } from '~/type/liveStream'
+import type { LiveStatus, PictureSettings } from '~/type/liveStream'
 
 useHead({
   title: 'Seeing Monitor'
@@ -23,9 +23,10 @@ const {
 
 const status = ref<LiveStatus | null>(null)
 const statusError = ref(false)
-const exposure = ref<number | undefined>()
-const gain = ref<number | undefined>()
-const autoExposure = ref(false)
+// The camera's exposure and gain drive the unattended seeing measurement and are set in the
+// admin panel. Visitors adjust only how the live picture is rendered from those frames.
+const pictureStretch = ref(3)
+const pictureFrames = ref(1)
 const settingsDirty = ref(false)
 const statusMessage = ref('')
 const errorMessage = ref('')
@@ -36,13 +37,12 @@ const clockNow = ref(Date.now())
 let statusPending = false
 let statusTimer: ReturnType<typeof setInterval> | undefined
 
-const applySettings = (settings?: CameraSettings) => {
-  if (!settings || settingsDirty.value) {
+const applyPicture = (picture?: PictureSettings) => {
+  if (!picture || settingsDirty.value) {
     return
   }
-  exposure.value = settings.exposure
-  gain.value = settings.gain
-  autoExposure.value = settings.autoExposure === true
+  if (typeof picture.gain === 'number') pictureStretch.value = picture.gain
+  if (typeof picture.frames === 'number') pictureFrames.value = picture.frames
 }
 
 const pollStatus = async () => {
@@ -54,7 +54,7 @@ const pollStatus = async () => {
     status.value = next
     statusReceivedAt.value = Date.now()
     statusError.value = false
-    applySettings(next.settings)
+    applyPicture(next.preview)
   } catch {
     statusError.value = true
   } finally {
@@ -128,7 +128,18 @@ const exposureLabel = computed(() => {
   const reported = telemetry.value?.extras?.exposureUs
   return telemetryFresh.value && typeof reported === 'number' ? formatNumber(reported) : '--'
 })
-const gainLabel = computed(() => gain.value ?? '--')
+const gainLabel = computed(() => {
+  const reported = telemetry.value?.extras?.gain
+  return telemetryFresh.value && typeof reported === 'number' ? reported : (status.value?.settings?.gain ?? '--')
+})
+const measurementLabel = computed(() => {
+  const settings = status.value?.settings
+  if (typeof settings?.exposure !== 'number') {
+    return '--'
+  }
+  const exposure = settings.exposure >= 1000 ? `${formatNumber(settings.exposure / 1000, settings.exposure % 1000 ? 1 : 0)} ms` : `${settings.exposure} µs`
+  return `${settings.autoExposure ? 'Automatic, at most' : 'Manual'} ${exposure} · gain ${settings.gain}`
+})
 const resolutionLabel = computed(() =>
   isLive.value && status.value?.width && status.value?.height
     ? `${status.value.width}×${status.value.height}`
@@ -166,11 +177,11 @@ const trackedStar = computed(() => {
 const overexposed = computed(() => telemetryFresh.value && telemetry.value?.extras?.frameOverexposed === true)
 const trackingLabel = computed(() => overexposed.value
   ? telemetry.value?.extras?.autoExposure === true
-    ? 'Image overexposed · automatic exposure is adjusting; reduce gain if it persists'
-    : 'Image overexposed · reduce exposure or enable automatic exposure'
+    ? 'Image overexposed · automatic exposure is adjusting (normal in daylight)'
+    : 'Image overexposed · the measurement exposure is manual; administrators can change it'
   : trackedStar.value
     ? trackedStar.value.saturated
-      ? 'Star saturated — reduce exposure or gain'
+      ? 'Star saturated — the measurement exposure or gain is too high'
       : telemetry.value?.extras?.seeing?.target === 'polaris_roi'
         ? 'Tracking selected Polaris region · coordinates and raw RMS in pixels'
         : 'Tracking brightest star · coordinates and raw RMS in pixels'
@@ -186,51 +197,24 @@ const markDirty = () => {
   settingsDirty.value = true
 }
 
-const saveSettings = async () => {
+const savePicture = async () => {
   errorMessage.value = ''
   statusMessage.value = ''
-  const nextExposure = exposure.value
-  const nextGain = gain.value
-
-  if (typeof nextExposure !== 'number'
-    || !Number.isInteger(nextExposure)
-    || nextExposure < 100
-    || nextExposure > 10000000) {
-    errorMessage.value = 'Exposure must be an integer between 100 and 10,000,000.'
-    return
-  }
-
-  if (typeof nextGain !== 'number'
-    || !Number.isInteger(nextGain)
-    || nextGain < 1
-    || nextGain > 100) {
-    errorMessage.value = 'Gain must be an integer between 1 and 100.'
-    return
-  }
-
   isSaving.value = true
-
   try {
     const formData = new FormData()
-    formData.append('exposure', String(nextExposure))
-    formData.append('gain', String(nextGain))
-    formData.append('autoExposure', String(autoExposure.value))
-
-    const response = await $fetch<{ ok?: boolean, settings?: CameraSettings }>(`${apiBase}/settings`, {
+    formData.append('previewGain', String(pictureStretch.value))
+    formData.append('previewFrames', String(pictureFrames.value))
+    const response = await $fetch<{ ok?: boolean, settings?: { preview?: PictureSettings } }>(`${apiBase}/settings`, {
       method: 'POST',
       body: formData
     })
-
     settingsDirty.value = false
-    if (response.settings) {
-      exposure.value = response.settings.exposure
-      gain.value = response.settings.gain
-      autoExposure.value = response.settings.autoExposure === true
-    }
-
-    statusMessage.value = response.ok === false ? 'Settings were not saved.' : 'Settings saved. The camera picks them up on its next report.'
+    applyPicture(response.settings?.preview)
+    statusMessage.value = 'Picture updated. It changes for everyone watching within a few seconds.'
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Unable to save settings.'
+    const data = (error as { data?: { error?: string } })?.data
+    errorMessage.value = data?.error || (error instanceof Error ? error.message : 'Unable to save the picture settings.')
   } finally {
     isSaving.value = false
   }
@@ -439,7 +423,7 @@ onBeforeUnmount(() => {
           <div class="mb-4 flex items-center justify-between gap-3">
             <div>
               <p class="astro-eyebrow">
-                Camera
+                Live picture
               </p>
               <h2 class="mt-1 text-lg font-black text-white">
                 Controls
@@ -453,26 +437,44 @@ onBeforeUnmount(() => {
 
           <form
             class="grid gap-4"
-            @submit.prevent="saveSettings"
+            @submit.prevent="savePicture"
           >
-            <label class="flex items-start gap-3 text-sm text-slate-200">
+            <label class="grid gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+              Stretch · {{ pictureStretch }}
               <input
-                v-model="autoExposure"
-                type="checkbox"
-                :disabled="status?.settings?.autoExposure === undefined"
-                class="mt-1 size-4 accent-sky-300"
-                @change="markDirty"
+                v-model.number="pictureStretch"
+                type="range"
+                min="1"
+                max="6"
+                step="0.5"
+                class="w-full accent-sky-300"
+                @input="markDirty"
               >
-              <span>
-                <span class="font-bold">Automatic exposure</span>
-                <span class="mt-1 block text-xs leading-5 text-slate-400">
-                  Shortens exposure in bright skies and restores your selected maximum after dark.
-                  Turn off for manual exposure. Apply settings to save the mode.
-                </span>
-              </span>
+              <span class="font-normal normal-case tracking-normal text-slate-500">1 is linear; higher values brighten faint stars and sky.</span>
             </label>
             <label class="grid gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-              Preview brightness · {{ previewBrightness }}×
+              Smoothing · {{ pictureFrames === 1 ? 'off' : `about ${pictureFrames} frames` }}
+              <input
+                v-model.number="pictureFrames"
+                type="range"
+                min="1"
+                max="8"
+                step="1"
+                class="w-full accent-sky-300"
+                @input="markDirty"
+              >
+              <span class="font-normal normal-case tracking-normal text-slate-500">Averages consecutive frames to reveal fainter stars; moving objects blur.</span>
+            </label>
+            <UButton
+              type="submit"
+              :loading="isSaving"
+              icon="i-lucide-save"
+              block
+            >
+              Apply to video
+            </UButton>
+            <label class="grid gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+              Screen brightness · {{ previewBrightness }}×
               <input
                 v-model.number="previewBrightness"
                 type="range"
@@ -481,47 +483,20 @@ onBeforeUnmount(() => {
                 step="0.25"
                 class="w-full accent-sky-300"
               >
-              <span class="font-normal normal-case tracking-normal text-slate-500">Display only; star measurements use the original camera pixels.</span>
+              <span class="font-normal normal-case tracking-normal text-slate-500">Only on your screen.</span>
             </label>
-            <UFormField
-              :label="autoExposure ? 'Maximum exposure (microseconds)' : 'Exposure (microseconds)'"
-              name="exposure"
-              :ui="{ label: 'text-xs font-bold uppercase tracking-wider text-slate-400' }"
-            >
-              <UInputNumber
-                v-model="exposure"
-                :min="100"
-                :max="10000000"
-                :step="1"
-                class="w-full"
-                @update:model-value="markDirty"
-              />
-            </UFormField>
-
-            <UFormField
-              label="Gain"
-              name="gain"
-              :ui="{ label: 'text-xs font-bold uppercase tracking-wider text-slate-400' }"
-            >
-              <UInputNumber
-                v-model="gain"
-                :min="1"
-                :max="100"
-                :step="1"
-                class="w-full"
-                @update:model-value="markDirty"
-              />
-            </UFormField>
-
-            <UButton
-              type="submit"
-              :loading="isSaving"
-              icon="i-lucide-save"
-              block
-            >
-              Apply Settings
-            </UButton>
           </form>
+
+          <div class="mt-4 rounded-md border border-white/10 bg-white/[0.03] p-3 text-xs leading-5 text-slate-400">
+            <div class="font-bold uppercase tracking-wider text-slate-300">
+              Measurement camera
+            </div>
+            <div class="mt-1 text-sm text-slate-200">
+              {{ measurementLabel }}
+            </div>
+            Exposure and gain decide whether Polaris can be measured, day and night, whether or not anyone
+            is watching. They are set by the site administrators. These controls change only the video.
+          </div>
 
           <UAlert
             v-if="statusMessage"

@@ -575,6 +575,24 @@ const localTime = (value: string | null | undefined) => {
                 {{ seeing.viewers ?? 0 }}
               </dd>
             </div>
+            <div
+              v-if="seeing.lastNight"
+              class="col-span-2"
+            >
+              <dt class="font-bold uppercase tracking-wider text-slate-500">
+                Last night · {{ seeing.lastNight.label }}
+              </dt>
+              <dd
+                class="mt-0.5 font-semibold"
+                :class="seeing.lastNight.validRecords > 0 ? 'text-slate-200' : 'text-amber-200'"
+              >
+                {{ seeing.lastNight.validRecords.toLocaleString() }} valid of {{ seeing.lastNight.records.toLocaleString() }} measurements
+                <span
+                  v-if="seeing.lastNight.records"
+                  class="font-normal text-slate-400"
+                >({{ Math.round(100 * seeing.lastNight.validRecords / seeing.lastNight.records) }}%)</span>
+              </dd>
+            </div>
             <div class="col-span-2">
               <dt class="font-bold uppercase tracking-wider text-slate-500">
                 GPS
