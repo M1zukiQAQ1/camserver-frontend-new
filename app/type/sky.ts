@@ -99,5 +99,14 @@ export interface Night {
   keogramHeight: number
   timelapse: string | null
   timelapseNote: string | null
+  /** whether the video frames carry the site name, UTC time and coordinates */
+  timelapseLabelled?: boolean
   builtAt: string
+}
+
+/** Where the video of one night stands (GET or POST /api/nightly/{cameraId}/{date}). */
+export interface NightVideoStatus {
+  state: 'ready' | 'queued' | 'building' | 'none' | 'unavailable'
+  message: string | null
+  night: Night | null
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Night } from '~/type/sky'
+import type { Night, NightVideoStatus } from '~/type/sky'
 
 useHead({
   title: 'Nights'
@@ -9,6 +9,7 @@ const apiBase = useApiBase()
 const ALL = 'all'
 
 const nights = ref<Night[]>([])
+const keyOf = (night: Night) => `${night.cameraId}/${night.date}`
 const loaded = ref(false)
 const errorMessage = ref('')
 const camera = ref(ALL)
@@ -27,6 +28,67 @@ const load = async () => {
 
 onMounted(load)
 
+// ---- videos on demand ---------------------------------------------------------------------
+
+interface Site { cameraId: string, siteName: string | null }
+
+const sites = ref<Site[]>([])
+const askCamera = ref('')
+const askDate = ref('')
+/** Per camera/date: what the server last said about a video we asked for. */
+const asked = ref<Record<string, { state: NightVideoStatus['state'], message: string }>>({})
+const timers: ReturnType<typeof setTimeout>[] = []
+
+onMounted(async () => {
+  try {
+    sites.value = (await $fetch<Site[]>(`${apiBase}/sites`)).map(site => ({ ...site, cameraId: site.cameraId.trim() }))
+    askCamera.value = sites.value.find(site => nights.value.some(night => night.cameraId === site.cameraId))?.cameraId
+      ?? sites.value[0]?.cameraId ?? ''
+  } catch {
+    sites.value = [] // the form is simply not shown
+  }
+})
+onBeforeUnmount(() => timers.forEach(clearTimeout))
+
+const siteItems = computed(() => sites.value.map(site => ({ label: site.siteName || site.cameraId, value: site.cameraId })))
+const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
+const askKey = computed(() => `${askCamera.value}/${askDate.value}`)
+const isWaiting = (key: string) => asked.value[key]?.state === 'queued' || asked.value[key]?.state === 'building'
+
+/** Puts a night that has just been built into the list, in date order, and opens its video. */
+const showNight = (night: Night) => {
+  const key = keyOf(night)
+  nights.value = [...nights.value.filter(other => keyOf(other) !== key), night]
+    .sort((a, b) => b.date.localeCompare(a.date) || a.cameraId.localeCompare(b.cameraId))
+  if (camera.value !== ALL && camera.value !== night.cameraId) {
+    camera.value = ALL
+  }
+  playing.value[key] = true
+  nextTick(() => document.getElementById(`night-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+}
+
+const askForVideo = async (cameraId: string, date: string, method: 'POST' | 'GET' = 'POST') => {
+  const key = `${cameraId}/${date}`
+  if (method === 'POST') {
+    asked.value[key] = { state: 'queued', message: '' }
+  }
+  try {
+    const status = await $fetch<NightVideoStatus>(`${apiBase}/nightly/${encodeURIComponent(cameraId)}/${date}`, { method })
+    asked.value[key] = { state: status.state, message: status.message ?? '' }
+    if (status.state === 'ready' && status.night) {
+      showNight(status.night)
+    } else if (status.state === 'queued' || status.state === 'building') {
+      timers.push(setTimeout(() => askForVideo(cameraId, date, 'GET'), 3000))
+    } else if (status.state === 'none') {
+      asked.value[key] = { state: 'unavailable', message: 'The server forgot the request; please ask again.' }
+    }
+  } catch (error) {
+    asked.value[key] = { state: 'unavailable', message: error instanceof Error ? error.message : 'The request failed.' }
+  }
+}
+
+const waitingLabel = (key: string) => asked.value[key]?.state === 'building' ? 'Making the video…' : 'Waiting in line…'
+
 const cameraItems = computed(() => {
   const names = new Map<string, string>()
   for (const night of nights.value) {
@@ -39,7 +101,6 @@ const visibleNights = computed(() =>
   camera.value === ALL ? nights.value : nights.value.filter(night => night.cameraId === camera.value)
 )
 
-const keyOf = (night: Night) => `${night.cameraId}/${night.date}`
 const fileUrl = (night: Night, name: string) =>
   `${apiBase}/nightly/${encodeURIComponent(night.cameraId)}/${night.date}/${name}?v=${encodeURIComponent(night.builtAt)}`
 
@@ -134,9 +195,50 @@ const openFrame = (night: Night, event: MouseEvent) => {
       No night has been summarised yet. A summary is made within an hour of dawn, from the frames of the night before.
     </div>
 
+    <form
+      v-if="siteItems.length"
+      class="astro-panel mb-6 flex flex-wrap items-end gap-3 p-4"
+      aria-label="Make the time-lapse of another night"
+      @submit.prevent="askForVideo(askCamera, askDate)"
+    >
+      <div class="min-w-0 grow basis-full text-sm leading-6 text-slate-400 lg:basis-0">
+        <span class="font-bold text-white">Time-lapse of any night.</span>
+        Pick a camera and the date of the evening; the video is made on request and takes about a minute.
+      </div>
+      <USelect
+        v-model="askCamera"
+        :items="siteItems"
+        class="w-56"
+        aria-label="Camera"
+      />
+      <UInput
+        v-model="askDate"
+        type="date"
+        :max="yesterday"
+        required
+        aria-label="Date of the evening"
+      />
+      <UButton
+        type="submit"
+        icon="i-lucide-film"
+        :loading="isWaiting(askKey)"
+        :disabled="!askCamera || !askDate || isWaiting(askKey)"
+      >
+        {{ isWaiting(askKey) ? waitingLabel(askKey) : 'Make video' }}
+      </UButton>
+      <p
+        v-if="asked[askKey]?.state === 'unavailable'"
+        class="basis-full text-sm text-amber-300"
+        role="status"
+      >
+        {{ asked[askKey]?.message }}
+      </p>
+    </form>
+
     <div class="space-y-6">
       <section
         v-for="night in visibleNights"
+        :id="`night-${keyOf(night)}`"
         :key="keyOf(night)"
         class="astro-panel overflow-hidden"
         :aria-label="`${night.siteName || night.cameraId}, night of ${dateLabel(night)}`"
@@ -161,6 +263,27 @@ const openFrame = (night: Night, event: MouseEvent) => {
           >
             {{ playing[keyOf(night)] ? 'Close time-lapse' : 'Time-lapse' }}
           </UButton>
+          <div
+            v-else
+            class="flex flex-wrap items-center justify-end gap-3"
+          >
+            <span
+              v-if="asked[keyOf(night)]?.state === 'unavailable'"
+              class="max-w-xs text-xs text-amber-300"
+              role="status"
+            >{{ asked[keyOf(night)]?.message }}</span>
+            <UButton
+              size="sm"
+              color="neutral"
+              variant="subtle"
+              icon="i-lucide-film"
+              :loading="isWaiting(keyOf(night))"
+              :disabled="isWaiting(keyOf(night))"
+              @click="askForVideo(night.cameraId, night.date)"
+            >
+              {{ isWaiting(keyOf(night)) ? waitingLabel(keyOf(night)) : 'Make time-lapse' }}
+            </UButton>
+          </div>
         </div>
 
         <div class="px-4 pb-4">
